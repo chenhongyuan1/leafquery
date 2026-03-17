@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "sirv dist --single --port $PORT"
+    "start": "sirv dist --host --single --port $PORT"
   },
   "dependencies": {
     "@vueuse/core": "^14.2.0",
