@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.NewsMapper">
+
+    <select id="selectAll" resultType="com.example.leafquery.entity.News">
+        SELECT n.*, u.username AS author_name
+        FROM news n
+        LEFT JOIN user u ON n.author_id = u.user_id
+        ORDER BY n.created_at DESC
+    </select>
+
+    <select id="selectByNewsId" resultType="com.example.leafquery.entity.News">
+        SELECT n.*, u.username AS author_name
+        FROM news n
+        LEFT JOIN user u ON n.author_id = u.user_id
+        WHERE n.news_id = #{newsId}
+    </select>
+
+    <insert id="insertNews" useGeneratedKeys="true" keyProperty="newsId">
+        INSERT INTO news (title, tag, content, views, author_id)
+        VALUES (#{title}, #{tag}, #{content}, 0, #{authorId})
+    </insert>
+
+    <update id="updateNews">
+        UPDATE news SET title = #{title}, tag = #{tag}, content = #{content}
+        WHERE news_id = #{newsId}
+    </update>
+
+    <delete id="deleteByNewsId">
+        DELETE FROM news WHERE news_id = #{newsId}
+    </delete>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM news
+    </select>
+
+</mapper>

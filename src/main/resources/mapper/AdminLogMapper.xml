@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.AdminLogMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO admin_log (admin_id, action, target, detail, ip)
+        VALUES (#{adminId}, #{action}, #{target}, #{detail}, #{ip})
+    </insert>
+
+    <select id="selectAll" resultType="com.example.leafquery.entity.AdminLog">
+        SELECT l.*, au.nickname as admin_name
+        FROM admin_log l
+        LEFT JOIN admin_user au ON l.admin_id = au.admin_id
+        ORDER BY l.created_at DESC
+        LIMIT 200
+    </select>
+
+    <select id="selectByAdminId" resultType="com.example.leafquery.entity.AdminLog">
+        SELECT l.*, au.nickname as admin_name
+        FROM admin_log l
+        LEFT JOIN admin_user au ON l.admin_id = au.admin_id
+        WHERE l.admin_id = #{adminId}
+        ORDER BY l.created_at DESC
+        LIMIT 100
+    </select>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM admin_log
+    </select>
+
+</mapper>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.ModelConfigMapper">
+
+    <select id="selectAll" resultType="com.example.leafquery.entity.ModelConfig">
+        SELECT * FROM model_config ORDER BY category, config_key
+    </select>
+
+    <select id="selectByCategory" resultType="com.example.leafquery.entity.ModelConfig">
+        SELECT * FROM model_config WHERE category = #{category} ORDER BY config_key
+    </select>
+
+    <select id="selectByKey" resultType="com.example.leafquery.entity.ModelConfig">
+        SELECT * FROM model_config WHERE config_key = #{configKey}
+    </select>
+
+    <update id="update">
+        UPDATE model_config
+        SET config_value = #{configValue},
+            description = #{description},
+            updated_by = #{updatedBy}
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO model_config (config_key, config_value, description, category, updated_by)
+        VALUES (#{configKey}, #{configValue}, #{description}, #{category}, #{updatedBy})
+    </insert>
+
+    <delete id="deleteById">
+        DELETE FROM model_config WHERE id = #{id}
+    </delete>
+
+</mapper>

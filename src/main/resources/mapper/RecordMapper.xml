@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.RecordMapper">
+
+    <resultMap id="RecordResultMap" type="com.example.leafquery.entity.Record">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="pestName" column="pest_name"/>
+        <result property="confidence" column="confidence"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO identification_record (user_id, pest_name, confidence, image_url, create_time)
+        VALUES (#{userId}, #{pestName}, #{confidence}, #{imageUrl}, NOW())
+    </insert>
+
+    <select id="selectRecordsByUserId" resultMap="RecordResultMap">
+        SELECT * FROM identification_record 
+        WHERE user_id = #{userId}
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM identification_record
+    </select>
+
+</mapper>

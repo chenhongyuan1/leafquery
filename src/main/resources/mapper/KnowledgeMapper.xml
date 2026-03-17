@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.KnowledgeMapper">
+
+    <select id="selectAll" resultType="com.example.leafquery.entity.Knowledge">
+        SELECT k.*, p.name AS plant_name
+        FROM knowledge k
+        LEFT JOIN plant p ON k.plant_id = p.plant_id
+        ORDER BY k.plant_id, k.knowledge_id
+    </select>
+
+    <select id="selectByPlantId" resultType="com.example.leafquery.entity.Knowledge">
+        SELECT k.*, p.name AS plant_name
+        FROM knowledge k
+        LEFT JOIN plant p ON k.plant_id = p.plant_id
+        WHERE k.plant_id = #{plantId}
+        ORDER BY k.knowledge_id
+    </select>
+
+    <select id="selectByKnowledgeId" resultType="com.example.leafquery.entity.Knowledge">
+        SELECT k.*, p.name AS plant_name
+        FROM knowledge k
+        LEFT JOIN plant p ON k.plant_id = p.plant_id
+        WHERE k.knowledge_id = #{knowledgeId}
+    </select>
+
+    <insert id="insertKnowledge" useGeneratedKeys="true" keyProperty="knowledgeId">
+        INSERT INTO knowledge (plant_id, condition_type, title, tag, image_url, description, prevention)
+        VALUES (#{plantId}, #{conditionType}, #{title}, #{tag}, #{imageUrl}, #{description}, #{prevention})
+    </insert>
+
+    <update id="updateKnowledge">
+        UPDATE knowledge
+        SET condition_type = #{conditionType}, title = #{title}, tag = #{tag},
+            image_url = #{imageUrl}, description = #{description}, prevention = #{prevention}
+        WHERE knowledge_id = #{knowledgeId}
+    </update>
+
+    <delete id="deleteByKnowledgeId">
+        DELETE FROM knowledge WHERE knowledge_id = #{knowledgeId}
+    </delete>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM knowledge
+    </select>
+
+</mapper>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.AdminUserMapper">
+
+    <select id="selectByUsername" resultType="com.example.leafquery.entity.AdminUser">
+        SELECT * FROM admin_user WHERE username = #{username}
+    </select>
+
+    <select id="selectById" resultType="com.example.leafquery.entity.AdminUser">
+        SELECT * FROM admin_user WHERE admin_id = #{adminId}
+    </select>
+
+    <select id="selectAll" resultType="com.example.leafquery.entity.AdminUser">
+        SELECT * FROM admin_user ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="adminId">
+        INSERT INTO admin_user (username, password, nickname, avatar_url, role, status)
+        VALUES (#{username}, #{password}, #{nickname}, #{avatarUrl}, #{role}, #{status})
+    </insert>
+
+    <update id="update">
+        UPDATE admin_user
+        SET nickname = #{nickname},
+            avatar_url = #{avatarUrl},
+            role = #{role},
+            status = #{status}
+        WHERE admin_id = #{adminId}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM admin_user WHERE admin_id = #{adminId}
+    </delete>
+
+    <update id="updateLastLogin">
+        UPDATE admin_user SET last_login_at = NOW() WHERE admin_id = #{adminId}
+    </update>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM admin_user
+    </select>
+
+</mapper>

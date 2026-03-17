@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.QnaMapper">
+
+    <!-- 查所有帖子，关联发帖人和专家信息 -->
+    <select id="selectAllPosts" resultType="com.example.leafquery.entity.QnaPost">
+        SELECT q.*,
+               u.username AS user_name,
+               u.avatar_url AS user_avatar,
+               e.username AS expert_name
+        FROM qna_post q
+        LEFT JOIN user u ON q.user_id = u.user_id
+        LEFT JOIN user e ON q.expert_id = e.user_id
+        ORDER BY q.created_at DESC
+    </select>
+
+    <select id="selectPostById" resultType="com.example.leafquery.entity.QnaPost">
+        SELECT q.*,
+               u.username AS user_name,
+               u.avatar_url AS user_avatar,
+               e.username AS expert_name
+        FROM qna_post q
+        LEFT JOIN user u ON q.user_id = u.user_id
+        LEFT JOIN user e ON q.expert_id = e.user_id
+        WHERE q.post_id = #{postId}
+    </select>
+
+    <insert id="insertPost" useGeneratedKeys="true" keyProperty="postId">
+        INSERT INTO qna_post (user_id, content, images, likes)
+        VALUES (#{userId}, #{content}, #{images}, 0)
+    </insert>
+
+    <update id="updateLikes">
+        UPDATE qna_post SET likes = #{likes} WHERE post_id = #{postId}
+    </update>
+
+    <!-- 查某帖子下所有评论 -->
+    <select id="selectCommentsByPostId" resultType="com.example.leafquery.entity.QnaComment">
+        SELECT c.*, u.username AS user_name
+        FROM qna_comment c
+        LEFT JOIN user u ON c.user_id = u.user_id
+        WHERE c.post_id = #{postId}
+        ORDER BY c.created_at ASC
+    </select>
+
+    <insert id="insertComment" useGeneratedKeys="true" keyProperty="commentId">
+        INSERT INTO qna_comment (post_id, user_id, content)
+        VALUES (#{postId}, #{userId}, #{content})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE qna_post SET status = #{status} WHERE post_id = #{postId}
+    </update>
+
+    <delete id="deletePostById">
+        DELETE FROM qna_post WHERE post_id = #{postId}
+    </delete>
+
+    <delete id="deleteCommentById">
+        DELETE FROM qna_comment WHERE comment_id = #{commentId}
+    </delete>
+
+    <select id="countPosts" resultType="int">
+        SELECT COUNT(*) FROM qna_post
+    </select>
+
+</mapper>
