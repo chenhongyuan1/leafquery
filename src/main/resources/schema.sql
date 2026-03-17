@@ -1,10 +1,10 @@
 -- 创建数据库 (如果不存在)
-CREATE DATABASE IF NOT EXISTS leafquery_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+--CREATE DATABASE IF NOT EXISTS leafquery_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE leafquery_db;
+--USE leafquery_db;
 
 -- ============================
--- 1. 用户表 (重写, 统一 user_id 格式)
+-- 1. 用户表 (统一 user_id 格式)
 -- ============================
 DROP TABLE IF EXISTS qna_comment;
 DROP TABLE IF EXISTS qna_post;
