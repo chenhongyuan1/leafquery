@@ -139,4 +139,8 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # 云平台通常会通过 PORT 环境变量告诉程序应该监听哪个端口
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False) # 生产环境关掉 debug
+
+    
