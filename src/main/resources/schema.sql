@@ -1,7 +1,7 @@
 -- 创建数据库 (如果不存在)
--- CREATE DATABASE IF NOT EXISTS leafquery_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS leafquery CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- USE leafquery_db;
+USE leafquery_db;
 
 -- ============================
 -- 1. 用户表 (统一 user_id 格式)
@@ -12,17 +12,18 @@ DROP TABLE IF EXISTS knowledge;
 DROP TABLE IF EXISTS plant;
 DROP TABLE IF EXISTS news;
 DROP TABLE IF EXISTS identification_record;
+DROP TABLE IF EXISTS user_crop;
 DROP TABLE IF EXISTS user_favorite;
-DROP TABLE IF EXISTS user;
+DROP TABLE IF EXISTS USER;
 
-CREATE TABLE user (
+CREATE TABLE USER (
     user_id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '用户主键ID (自增)',
     username VARCHAR(64) NOT NULL UNIQUE COMMENT '用户名',
-    password VARCHAR(255) NOT NULL COMMENT '用户密码',
+    PASSWORD VARCHAR(255) NOT NULL COMMENT '用户密码',
     phone_number VARCHAR(20) UNIQUE COMMENT '手机号',
     email VARCHAR(128) UNIQUE COMMENT '邮箱',
     avatar_url VARCHAR(512) DEFAULT '' COMMENT '用户头像URL',
-    role VARCHAR(32) DEFAULT 'user' COMMENT '用户角色: user/expert/admin',
+    ROLE VARCHAR(32) DEFAULT 'user' COMMENT '用户角色: user/expert/admin',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '注册时间',
     INDEX idx_username (username)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表';
@@ -222,6 +223,39 @@ CREATE TABLE user_favorite (
 -- ============================
 -- 9. 管理员用户表
 -- ============================
+CREATE TABLE user_crop (
+    crop_id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '作物档案ID',
+    user_id BIGINT NOT NULL COMMENT '所属用户ID',
+    crop_name VARCHAR(64) NOT NULL COMMENT '作物名称',
+    stage VARCHAR(64) DEFAULT '' COMMENT '当前生效物候期',
+    province VARCHAR(64) DEFAULT '' COMMENT '省份',
+    city VARCHAR(64) DEFAULT '' COMMENT '城市',
+    region VARCHAR(64) DEFAULT '' COMMENT '农业生态区',
+    location_id VARCHAR(32) DEFAULT '' COMMENT '和风天气地区ID',
+    sowing_date DATE NULL COMMENT '播种日期',
+    transplant_date DATE NULL COMMENT '移栽日期',
+    stage_mode VARCHAR(16) DEFAULT 'MANUAL' COMMENT '物候期模式：AUTO自动判断，MANUAL手动设置',
+    estimated_stage VARCHAR(64) DEFAULT '' COMMENT '系统估算物候期',
+    stage_confidence DECIMAL(4,2) DEFAULT 0 COMMENT '系统估算置信度',
+    stage_reason VARCHAR(255) DEFAULT '' COMMENT '系统估算依据或提示',
+    stage_evaluated_at TIMESTAMP NULL COMMENT '最近一次物候期估算时间',
+    is_active TINYINT(1) DEFAULT 0 COMMENT '是否为当前激活作物',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_crop_user_id (user_id),
+    INDEX idx_crop_user_active (user_id, is_active),
+    CONSTRAINT fk_crop_user FOREIGN KEY (user_id) REFERENCES user(user_id) ON DELETE CASCADE
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户作物档案表';
+
+ALTER TABLE identification_record
+    ADD COLUMN crop_id BIGINT NULL COMMENT '关联作物档案ID快照' AFTER user_id,
+    ADD COLUMN crop_name VARCHAR(64) DEFAULT '' COMMENT '识别时的作物名称快照' AFTER crop_id,
+    ADD COLUMN location_id VARCHAR(32) DEFAULT '' COMMENT '识别时的和风天气地区ID快照' AFTER confidence,
+    ADD COLUMN city VARCHAR(64) DEFAULT '' COMMENT '识别时的城市快照' AFTER location_id,
+    ADD COLUMN region VARCHAR(64) DEFAULT '' COMMENT '识别时的农业生态区快照' AFTER city,
+    ADD INDEX idx_record_crop_id (crop_id),
+    ADD CONSTRAINT fk_record_crop FOREIGN KEY (crop_id) REFERENCES user_crop(crop_id) ON DELETE SET NULL;
+
 DROP TABLE IF EXISTS admin_log;
 DROP TABLE IF EXISTS announcement;
 DROP TABLE IF EXISTS model_config;

@@ -10,12 +10,17 @@ public class TrendForecastResponse {
 
     private String crop;
     private String disease;
+    private String targetType;
+    private String targetName;
     private String regionCode;
+    private boolean supported = true;
+    private String message;
     private double todayRiskScore;
     private int todayRiskLevel;
     private String trendDirection;  // "上升" / "平稳" / "下降"
     private List<DailyRisk> dailySeries;
     private List<String> topDrivers;
+    private List<String> warnings;
     private Map<String, Object> weatherSummary;
     private String modelVersion;
 
@@ -26,8 +31,20 @@ public class TrendForecastResponse {
     public String getDisease() { return disease; }
     public void setDisease(String disease) { this.disease = disease; }
 
+    public String getTargetType() { return targetType; }
+    public void setTargetType(String targetType) { this.targetType = targetType; }
+
+    public String getTargetName() { return targetName; }
+    public void setTargetName(String targetName) { this.targetName = targetName; }
+
     public String getRegionCode() { return regionCode; }
     public void setRegionCode(String regionCode) { this.regionCode = regionCode; }
+
+    public boolean isSupported() { return supported; }
+    public void setSupported(boolean supported) { this.supported = supported; }
+
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
 
     public double getTodayRiskScore() { return todayRiskScore; }
     public void setTodayRiskScore(double todayRiskScore) { this.todayRiskScore = todayRiskScore; }
@@ -43,6 +60,9 @@ public class TrendForecastResponse {
 
     public List<String> getTopDrivers() { return topDrivers; }
     public void setTopDrivers(List<String> topDrivers) { this.topDrivers = topDrivers; }
+
+    public List<String> getWarnings() { return warnings; }
+    public void setWarnings(List<String> warnings) { this.warnings = warnings; }
 
     public Map<String, Object> getWeatherSummary() { return weatherSummary; }
     public void setWeatherSummary(Map<String, Object> weatherSummary) { this.weatherSummary = weatherSummary; }

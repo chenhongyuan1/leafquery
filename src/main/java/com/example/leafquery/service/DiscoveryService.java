@@ -22,6 +22,9 @@ public class DiscoveryService {
     @Autowired
     private QnaMapper qnaMapper;
 
+    @Autowired
+    private UserMapper userMapper;
+
     // ========== 资讯 ==========
     public List<News> getAllNews() {
         return newsMapper.selectAll();
@@ -73,14 +76,42 @@ public class DiscoveryService {
         return getPostById(post.getPostId());
     }
 
+    public void deletePost(Long postId) {
+        qnaMapper.deletePostById(postId);
+    }
+
     public void likePost(Long postId, Integer likes) {
         qnaMapper.updateLikes(postId, likes);
     }
 
-    public QnaComment addComment(QnaComment comment) {
+    public java.util.Map<String, Object> processComment(QnaComment comment) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        com.example.leafquery.entity.User user = userMapper.selectByUserId(comment.getUserId());
+        
+        if (user != null && "expert".equals(user.getRole())) {
+            QnaPost post = qnaMapper.selectPostById(comment.getPostId());
+            if (post != null && post.getExpertId() == null) {
+                // 首次专家回复，进行覆盖
+                qnaMapper.updateExpertReply(comment.getPostId(), user.getUserId(), comment.getContent());
+                result.put("type", "expert_reply");
+                result.put("expertName", user.getUsername());
+                result.put("content", comment.getContent());
+                return result;
+            }
+        }
+        
         qnaMapper.insertComment(comment);
-        // 返回包含用户名的完整评论
-        List<QnaComment> comments = qnaMapper.selectCommentsByPostId(comment.getPostId());
-        return comments.get(comments.size() - 1);
+        List<QnaComment> all = qnaMapper.selectCommentsByPostId(comment.getPostId());
+        result.put("type", "normal_comment");
+        result.put("data", all.get(all.size() - 1));
+        return result;
+    }
+
+    public void deleteComment(Long commentId) {
+        qnaMapper.deleteCommentById(commentId);
+    }
+
+    public void deleteExpertReply(Long postId) {
+        qnaMapper.deleteExpertReply(postId);
     }
 }

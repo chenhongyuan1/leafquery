@@ -5,8 +5,13 @@ import java.util.Date;
 public class Record {
     private Long id;
     private Long userId;
+    private Long cropId;
+    private String cropName;
     private String pestName;
     private Double confidence;
+    private String locationId;
+    private String city;
+    private String region;
     private String imageUrl;
     private Date createTime;
 
@@ -38,6 +43,22 @@ public class Record {
         this.userId = userId;
     }
 
+    public Long getCropId() {
+        return cropId;
+    }
+
+    public void setCropId(Long cropId) {
+        this.cropId = cropId;
+    }
+
+    public String getCropName() {
+        return cropName;
+    }
+
+    public void setCropName(String cropName) {
+        this.cropName = cropName;
+    }
+
     public String getPestName() {
         return pestName;
     }
@@ -52,6 +73,30 @@ public class Record {
 
     public void setConfidence(Double confidence) {
         this.confidence = confidence;
+    }
+
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
     }
 
     public String getImageUrl() {

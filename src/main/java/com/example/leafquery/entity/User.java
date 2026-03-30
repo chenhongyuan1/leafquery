@@ -1,9 +1,12 @@
 package com.example.leafquery.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class User {
 
     private Long userId;
     private String username;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
     private String phoneNumber;
     private String email;

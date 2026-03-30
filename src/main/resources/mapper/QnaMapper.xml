@@ -36,9 +36,15 @@
         UPDATE qna_post SET likes = #{likes} WHERE post_id = #{postId}
     </update>
 
+    <update id="updateExpertReply">
+        UPDATE qna_post 
+        SET expert_id = #{expertId}, expert_reply = #{expertReply} 
+        WHERE post_id = #{postId}
+    </update>
+
     <!-- 查某帖子下所有评论 -->
     <select id="selectCommentsByPostId" resultType="com.example.leafquery.entity.QnaComment">
-        SELECT c.*, u.username AS user_name
+        SELECT c.*, u.username AS user_name, u.avatar_url AS user_avatar
         FROM qna_comment c
         LEFT JOIN user u ON c.user_id = u.user_id
         WHERE c.post_id = #{postId}
@@ -61,6 +67,10 @@
     <delete id="deleteCommentById">
         DELETE FROM qna_comment WHERE comment_id = #{commentId}
     </delete>
+
+    <update id="deleteExpertReply">
+        UPDATE qna_post SET expert_id = NULL, expert_reply = NULL WHERE post_id = #{postId}
+    </update>
 
     <select id="countPosts" resultType="int">
         SELECT COUNT(*) FROM qna_post

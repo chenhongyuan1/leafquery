@@ -1,90 +1,269 @@
-import os
 import io
+import json
+import os
 import shutil
-from flask import Flask, request, jsonify
+
+# Must be configured before importing ultralytics, otherwise config writes may fail.
+os.environ["YOLO_CONFIG_DIR"] = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), ".ultralytics"
+)
+
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-from ultralytics import YOLO
 from PIL import Image
+from ultralytics import YOLO
+
+from class_name_translation_clean import translate_class_name, get_target_metadata
 
 app = Flask(__name__)
 CORS(app)
 
 MODEL_PATH = "best.pt"
 BACKUP_DIR = "model_backups"
+DETECTION_BOX_THRESHOLD = float(os.environ.get("YOLO_DETECTION_BOX_THRESHOLD", "0.35"))
+PRIMARY_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("YOLO_DETECTION_PRIMARY_THRESHOLD", "0.60")
+)
+UNKNOWN_LABEL = "\u672a\u8bc6\u522b"
 
-# 加载 YOLOv8s 分类模型（启动时加载一次）
+# 用户类别 → YOLO 类名过滤的映射关系
+# "虫害" 匹配所有 targetType == "pest" 的类名
+# "水稻"/"玉米"/"小麦" 匹配 cropNames 包含对应作物的类名
+YOLO_SUPPORTED_CATEGORIES = {"水稻", "玉米", "小麦", "虫害"}
+
 model = YOLO(MODEL_PATH)
+
+
+def _load_category_index():
+    """加载 detection_target_metadata_clean.json，构建类名→作物和类型的索引。"""
+    catalog_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "detection_target_metadata_clean.json",
+    )
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except FileNotFoundError:
+        return {}
+
+    targets = payload.get("targets", [])
+    index = {}
+    for item in targets:
+        class_name = str(item.get("className", "")).strip().replace("-", "_").lower()
+        if class_name:
+            index[class_name] = {
+                "crop_names": [c.strip() for c in item.get("cropNames", [])],
+                "target_type": item.get("targetType", "unknown"),
+            }
+    return index
+
+
+CATEGORY_INDEX = _load_category_index()
+
+
+def is_class_allowed(class_name, categories):
+    """判断一个 YOLO 类名是否被用户选择的类别所允许。
+
+    规则：
+    - 用户选了 "水稻"：允许 cropNames 包含 "水稻" 的所有类（病害+虫害+健康）
+    - 用户选了 "虫害"：允许 targetType == "pest" 的所有类（不限作物）
+    - 用户选了 "其他"：该函数不会被调用（其他不走YOLO）
+    - 多选取并集
+    """
+    normalized = class_name.strip().replace("-", "_").lower()
+    meta = CATEGORY_INDEX.get(normalized)
+    if meta is None:
+        # 未知类名（不在元数据中），保守保留
+        return True
+
+    for cat in categories:
+        if cat == "虫害":
+            if meta["target_type"] == "pest":
+                return True
+        elif cat in ("水稻", "玉米", "小麦"):
+            if cat in meta["crop_names"]:
+                return True
+    return False
 
 
 @app.route("/reload", methods=["POST"])
 def reload_model():
-    """热重载模型，替换后无需重启服务。"""
+    """Hot reload the model after replacing best.pt."""
     global model
     try:
         model = YOLO(MODEL_PATH)
-        return jsonify({"code": 200, "message": "模型重载成功"})
-    except Exception as e:
-        return jsonify({"code": 500, "message": f"重载失败: {str(e)}"}), 500
+        return jsonify({"code": 200, "message": "model reloaded"})
+    except Exception as exc:
+        return jsonify({"code": 500, "message": f"reload failed: {exc}"}), 500
 
 
 @app.route("/upload_model", methods=["POST"])
 def upload_model():
-    """接收新模型文件，备份旧模型，替换并热重载。"""
+    """Upload a new .pt model, back up the old one, and hot reload."""
     global model
     if "file" not in request.files:
-        return jsonify({"code": 400, "message": "未提供模型文件"}), 400
+        return jsonify({"code": 400, "message": "missing model file"}), 400
 
     file = request.files["file"]
     if not file.filename.endswith(".pt"):
-        return jsonify({"code": 400, "message": "仅支持 .pt 格式模型文件"}), 400
+        return jsonify({"code": 400, "message": "only .pt model files are supported"}), 400
 
     try:
-        # 备份旧模型
         if os.path.exists(MODEL_PATH):
             os.makedirs(BACKUP_DIR, exist_ok=True)
             from datetime import datetime
+
             backup_name = f"best_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
             shutil.copy2(MODEL_PATH, os.path.join(BACKUP_DIR, backup_name))
 
-        # 保存新模型
         file.save(MODEL_PATH)
-
-        # 热重载
         model = YOLO(MODEL_PATH)
 
-        return jsonify({
-            "code": 200,
-            "message": "模型上传并重载成功",
-            "fileSize": os.path.getsize(MODEL_PATH)
-        })
-    except Exception as e:
-        return jsonify({"code": 500, "message": f"上传失败: {str(e)}"}), 500
+        return jsonify(
+            {
+                "code": 200,
+                "message": "model uploaded and reloaded",
+                "fileSize": os.path.getsize(MODEL_PATH),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"code": 500, "message": f"upload failed: {exc}"}), 500
 
 
-# 英文类名 → 中文翻译
-NAME_ZH = {
-    "Maize leaf spot": "玉米叶斑病",
-    "Maize leaf blight": "玉米叶枯病",
-    "Maize streak virus": "玉米条纹病毒病",
-    "Maize grasshoper": "玉米蝗虫",
-    "Maize leaf beetle": "玉米叶甲虫",
-    "Maize fall armyworm": "玉米草地贪夜蛾",
-    "Maize healthy": "玉米（健康）",
-    "Tomato septoria leaf spot": "番茄壳针孢叶斑病",
-    "Tomato leaf blight": "番茄叶枯病",
-    "Cashew anthracnose": "腰果炭疽病",
-    "Cashew leaf miner": "腰果潜叶蛾",
-}
+def build_empty_prediction(scene_type="empty"):
+    return {
+        "pest_name": UNKNOWN_LABEL,
+        "confidence": 0.0,
+        "scene_type": scene_type,
+        "primary_target": "",
+        "primary_target_zh": UNKNOWN_LABEL,
+        "primary_confidence": 0.0,
+        "class_count": 0,
+        "target_count": 0,
+        "class_names_zh": [],
+        "detected_summary": [],
+    }
 
 
-def to_chinese(name):
-    """将英文类名翻译为中文，未收录则原样返回。"""
-    return NAME_ZH.get(name, name)
+def summarize_detections(result, categories=None):
+    """汇总检测框，可选按用户类别过滤。"""
+    raw_boxes = result.boxes
+    if raw_boxes is None or len(raw_boxes) == 0:
+        return None, 0
+
+    confidences = raw_boxes.conf.cpu().tolist()
+    class_ids = [int(value) for value in raw_boxes.cls.cpu().tolist()]
+    raw_target_count = len(class_ids)
+
+    summary_by_name = {}
+    filtered_count = 0
+    for confidence, class_id in zip(confidences, class_ids):
+        confidence = float(confidence)
+        if confidence < DETECTION_BOX_THRESHOLD:
+            continue
+
+        class_name = result.names[class_id]
+
+        # ===== 用户类别硬性筛查 =====
+        if categories and not is_class_allowed(class_name, categories):
+            filtered_count += 1
+            continue
+
+        item = summary_by_name.setdefault(
+            class_name,
+            {
+                "name": class_name,
+                "name_zh": translate_class_name(class_name),
+                "count": 0,
+                "max_confidence": 0.0,
+                "confidence_sum": 0.0,
+            },
+        )
+        item["count"] += 1
+        item["max_confidence"] = max(item["max_confidence"], confidence)
+        item["confidence_sum"] += confidence
+
+    detected_summary = []
+    for item in summary_by_name.values():
+        detected_summary.append(
+            {
+                "name": item["name"],
+                "name_zh": item["name_zh"],
+                "count": item["count"],
+                "max_confidence": round(item["max_confidence"], 4),
+                "avg_confidence": round(item["confidence_sum"] / item["count"], 4),
+            }
+        )
+
+    detected_summary.sort(
+        key=lambda entry: (-entry["max_confidence"], -entry["count"], entry["name"])
+    )
+    return detected_summary, raw_target_count
+
+
+def build_detection_prediction(result, categories=None):
+    detected_summary, raw_target_count = summarize_detections(result, categories)
+    if not detected_summary:
+        return build_empty_prediction("uncertain" if raw_target_count > 0 else "empty")
+
+    primary = detected_summary[0]
+    primary_confidence = float(primary["max_confidence"])
+    class_names_zh = [entry["name_zh"] for entry in detected_summary]
+    target_count = sum(entry["count"] for entry in detected_summary)
+
+    if primary_confidence < PRIMARY_CONFIDENCE_THRESHOLD:
+        scene_type = "uncertain"
+    elif len(detected_summary) == 1:
+        scene_type = "single"
+    else:
+        scene_type = "multi"
+
+    return {
+        "pest_name": primary["name_zh"],
+        "confidence": round(primary_confidence, 4),
+        "scene_type": scene_type,
+        "primary_target": primary["name"],
+        "primary_target_zh": primary["name_zh"],
+        "primary_confidence": round(primary_confidence, 4),
+        "class_count": len(detected_summary),
+        "target_count": target_count,
+        "class_names_zh": class_names_zh,
+        "detected_summary": detected_summary,
+    }
+
+
+def build_classification_prediction(result):
+    top1_idx = result.probs.top1
+    top1_conf = float(result.probs.top1conf.cpu().numpy())
+    class_name = result.names[top1_idx]
+    class_name_zh = translate_class_name(class_name)
+    scene_type = "single" if top1_conf >= PRIMARY_CONFIDENCE_THRESHOLD else "uncertain"
+
+    return {
+        "pest_name": class_name_zh,
+        "confidence": round(top1_conf, 4),
+        "scene_type": scene_type,
+        "primary_target": class_name,
+        "primary_target_zh": class_name_zh,
+        "primary_confidence": round(top1_conf, 4),
+        "class_count": 1,
+        "target_count": 1,
+        "class_names_zh": [class_name_zh],
+        "detected_summary": [
+            {
+                "name": class_name,
+                "name_zh": class_name_zh,
+                "count": 1,
+                "max_confidence": round(top1_conf, 4),
+                "avg_confidence": round(top1_conf, 4),
+            }
+        ],
+    }
 
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """接收图片文件，使用 YOLOv8s 进行病虫害识别，返回 JSON 结果。"""
+    """Run YOLO inference with optional category filtering."""
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -92,55 +271,34 @@ def predict():
     if file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
+    # 解析用户选择的类别（逗号分隔字符串或 JSON 数组）
+    categories_raw = request.form.get("categories", "")
+    categories = []
+    if categories_raw:
+        try:
+            categories = json.loads(categories_raw)
+        except (json.JSONDecodeError, TypeError):
+            categories = [c.strip() for c in categories_raw.split(",") if c.strip()]
+
     try:
-        # 读取图片
         image_bytes = file.read()
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        results = model(image, verbose=False)
 
-        # YOLOv8 推理
-        results = model(image)
-
-        if results and len(results) > 0:
+        if results:
             result = results[0]
 
-            # ===== 分类模型 (result.probs) =====
-            if result.probs is not None:
-                top1_idx = result.probs.top1
-                top1_conf = float(result.probs.top1conf.cpu().numpy())
-                pest_name = result.names[top1_idx]
-
-                return jsonify({
-                    "pest_name": to_chinese(pest_name),
-                    "confidence": round(top1_conf, 4)
-                })
-
-            # ===== 检测模型 (result.boxes) =====
             if result.boxes is not None and len(result.boxes) > 0:
-                confidences = result.boxes.conf.cpu().numpy()
-                class_ids = result.boxes.cls.cpu().numpy().astype(int)
-                best_idx = confidences.argmax()
+                return jsonify(build_detection_prediction(result, categories or None))
 
-                pest_name = result.names[class_ids[best_idx]]
-                confidence = float(confidences[best_idx])
+            if result.probs is not None:
+                return jsonify(build_classification_prediction(result))
 
-                return jsonify({
-                    "pest_name": to_chinese(pest_name),
-                    "confidence": round(confidence, 4)
-                })
-
-        # 未检测到任何目标
-        return jsonify({
-            "pest_name": "未识别",
-            "confidence": 0.0
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify(build_empty_prediction())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 if __name__ == "__main__":
-    # 云平台通常会通过 PORT 环境变量告诉程序应该监听哪个端口
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False) # 生产环境关掉 debug
-
-    
+    app.run(host="0.0.0.0", port=port, debug=False)

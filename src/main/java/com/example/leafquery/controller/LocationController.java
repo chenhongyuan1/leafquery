@@ -2,6 +2,7 @@ package com.example.leafquery.controller;
 
 import com.example.leafquery.service.QWeatherService;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -12,6 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/location")
+@CrossOrigin(origins = "*")
 public class LocationController {
 
     private final QWeatherService qWeatherService;

@@ -10,6 +10,7 @@ public class QnaComment {
 
     // 关联字段
     private String userName;
+    private String userAvatar;
 
     public QnaComment() {
     }
@@ -60,5 +61,13 @@ public class QnaComment {
 
     public void setUserName(String userName) {
         this.userName = userName;
+    }
+
+    public String getUserAvatar() {
+        return userAvatar;
+    }
+
+    public void setUserAvatar(String userAvatar) {
+        this.userAvatar = userAvatar;
     }
 }

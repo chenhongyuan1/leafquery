@@ -18,6 +18,8 @@ public interface QnaMapper {
 
     int updateStatus(Long postId, Integer status);
 
+    int updateExpertReply(@org.apache.ibatis.annotations.Param("postId") Long postId, @org.apache.ibatis.annotations.Param("expertId") Long expertId, @org.apache.ibatis.annotations.Param("expertReply") String expertReply);
+
     List<QnaComment> selectCommentsByPostId(Long postId);
 
     int insertComment(QnaComment comment);
@@ -25,6 +27,8 @@ public interface QnaMapper {
     int deletePostById(Long postId);
 
     int deleteCommentById(Long commentId);
+
+    int deleteExpertReply(Long postId);
 
     int countPosts();
 }

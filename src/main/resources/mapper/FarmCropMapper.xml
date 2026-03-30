@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.FarmCropMapper">
+
+    <resultMap id="FarmCropResultMap" type="com.example.leafquery.entity.FarmCrop">
+        <id property="cropId" column="crop_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="cropName" column="crop_name"/>
+        <result property="stage" column="stage"/>
+        <result property="province" column="province"/>
+        <result property="city" column="city"/>
+        <result property="region" column="region"/>
+        <result property="locationId" column="location_id"/>
+        <result property="sowingDate" column="sowing_date"/>
+        <result property="transplantDate" column="transplant_date"/>
+        <result property="stageMode" column="stage_mode"/>
+        <result property="estimatedStage" column="estimated_stage"/>
+        <result property="stageConfidence" column="stage_confidence"/>
+        <result property="stageReason" column="stage_reason"/>
+        <result property="stageEvaluatedAt" column="stage_evaluated_at"/>
+        <result property="isActive" column="is_active"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectByUserId" resultMap="FarmCropResultMap">
+        SELECT *
+        FROM user_crop
+        WHERE user_id = #{userId}
+        ORDER BY is_active DESC, updated_at DESC, created_at DESC
+    </select>
+
+    <select id="selectByCropId" resultMap="FarmCropResultMap">
+        SELECT *
+        FROM user_crop
+        WHERE crop_id = #{cropId}
+        LIMIT 1
+    </select>
+
+    <select id="selectFirstByUserId" resultMap="FarmCropResultMap">
+        SELECT *
+        FROM user_crop
+        WHERE user_id = #{userId}
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM user_crop
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="insertCrop" useGeneratedKeys="true" keyProperty="cropId">
+        INSERT INTO user_crop (
+            user_id,
+            crop_name,
+            stage,
+            province,
+            city,
+            region,
+            location_id,
+            sowing_date,
+            transplant_date,
+            stage_mode,
+            estimated_stage,
+            stage_confidence,
+            stage_reason,
+            stage_evaluated_at,
+            is_active,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{userId},
+            #{cropName},
+            #{stage},
+            #{province},
+            #{city},
+            #{region},
+            #{locationId},
+            #{sowingDate},
+            #{transplantDate},
+            #{stageMode},
+            #{estimatedStage},
+            #{stageConfidence},
+            #{stageReason},
+            #{stageEvaluatedAt},
+            #{isActive},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="updateCrop">
+        UPDATE user_crop
+        <set>
+            <if test="cropName != null">crop_name = #{cropName},</if>
+            <if test="stage != null">stage = #{stage},</if>
+            <if test="province != null">province = #{province},</if>
+            <if test="city != null">city = #{city},</if>
+            <if test="region != null">region = #{region},</if>
+            <if test="locationId != null">location_id = #{locationId},</if>
+            <if test="sowingDate != null">sowing_date = #{sowingDate},</if>
+            <if test="transplantDate != null">transplant_date = #{transplantDate},</if>
+            <if test="stageMode != null">stage_mode = #{stageMode},</if>
+            <if test="estimatedStage != null">estimated_stage = #{estimatedStage},</if>
+            <if test="stageConfidence != null">stage_confidence = #{stageConfidence},</if>
+            <if test="stageReason != null">stage_reason = #{stageReason},</if>
+            <if test="stageEvaluatedAt != null">stage_evaluated_at = #{stageEvaluatedAt},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+            updated_at = NOW()
+        </set>
+        WHERE crop_id = #{cropId} AND user_id = #{userId}
+    </update>
+
+    <update id="clearActiveByUserId">
+        UPDATE user_crop
+        SET is_active = 0,
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="setActiveCrop">
+        UPDATE user_crop
+        SET is_active = 1,
+            updated_at = NOW()
+        WHERE crop_id = #{cropId} AND user_id = #{userId}
+    </update>
+
+    <delete id="deleteCrop">
+        DELETE FROM user_crop
+        WHERE crop_id = #{cropId} AND user_id = #{userId}
+    </delete>
+
+</mapper>

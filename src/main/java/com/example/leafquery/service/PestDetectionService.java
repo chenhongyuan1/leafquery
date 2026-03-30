@@ -13,9 +13,11 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 调用 Python 服务进行病虫害图片识别的 Service 层。
- * 使用 RestTemplate 发送 multipart/form-data 请求。
+ * 支持传递用户预选类别进行 YOLO 检测框过滤。
  */
 @Service
 public class PestDetectionService {
@@ -31,17 +33,17 @@ public class PestDetectionService {
     }
 
     /**
-     * 将图片发送给 Python 预测服务，返回检测结果。
+     * 将图片和用户选择的类别发送给 Python 预测服务，返回过滤后的检测结果。
      *
-     * @param imageFile 用户上传的图片文件
-     * @return PredictionResult 包含 pestName 和 confidence
+     * @param imageFile  用户上传的图片文件
+     * @param categories 用户预选的类别列表（如 ["玉米", "虫害"]）
+     * @return PredictionResult 过滤后的检测结果
      */
-    public PredictionResult detectPest(MultipartFile imageFile) {
+    public PredictionResult detectPest(MultipartFile imageFile, List<String> categories) {
         try {
             byte[] fileBytes = imageFile.getBytes();
             String originalFilename = imageFile.getOriginalFilename();
 
-            // 构建 multipart 请求体
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("file", new ByteArrayResource(fileBytes) {
                 @Override
@@ -49,6 +51,11 @@ public class PestDetectionService {
                     return originalFilename;
                 }
             });
+
+            // 将用户类别作为逗号分隔字符串传给 Python
+            if (categories != null && !categories.isEmpty()) {
+                body.add("categories", String.join(",", categories));
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -68,5 +75,12 @@ public class PestDetectionService {
             log.error("调用 Python 预测服务失败", e);
             throw new RuntimeException("病虫害识别服务调用失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 不带类别过滤的检测（向后兼容旧接口）。
+     */
+    public PredictionResult detectPest(MultipartFile imageFile) {
+        return detectPest(imageFile, null);
     }
 }

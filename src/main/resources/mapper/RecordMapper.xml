@@ -6,15 +6,42 @@
     <resultMap id="RecordResultMap" type="com.example.leafquery.entity.Record">
         <id property="id" column="id"/>
         <result property="userId" column="user_id"/>
+        <result property="cropId" column="crop_id"/>
+        <result property="cropName" column="crop_name"/>
         <result property="pestName" column="pest_name"/>
         <result property="confidence" column="confidence"/>
+        <result property="locationId" column="location_id"/>
+        <result property="city" column="city"/>
+        <result property="region" column="region"/>
         <result property="imageUrl" column="image_url"/>
         <result property="createTime" column="create_time"/>
     </resultMap>
 
     <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO identification_record (user_id, pest_name, confidence, image_url, create_time)
-        VALUES (#{userId}, #{pestName}, #{confidence}, #{imageUrl}, NOW())
+        INSERT INTO identification_record (
+            user_id,
+            crop_id,
+            crop_name,
+            pest_name,
+            confidence,
+            location_id,
+            city,
+            region,
+            image_url,
+            create_time
+        )
+        VALUES (
+            #{userId},
+            #{cropId},
+            #{cropName},
+            #{pestName},
+            #{confidence},
+            #{locationId},
+            #{city},
+            #{region},
+            #{imageUrl},
+            NOW()
+        )
     </insert>
 
     <select id="selectRecordsByUserId" resultMap="RecordResultMap">
