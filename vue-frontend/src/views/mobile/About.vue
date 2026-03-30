@@ -9,7 +9,7 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
+  <div class="about-page min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
     <!-- Header -->
     <div class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 py-4">
       <button @click="goBack" class="p-2 -ml-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all outline-none">
@@ -93,5 +93,47 @@ const goBack = () => {
 .overflow-y-auto {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+:global(.dark) .about-page {
+  background:
+    radial-gradient(circle at top, rgba(16, 185, 129, 0.16), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #0f172a 42%, #111827 100%);
+}
+
+:global(.dark) .about-page :deep([class~='bg-white']),
+:global(.dark) .about-page :deep([class~='bg-white/80']) {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+}
+
+:global(.dark) .about-page :deep([class~='bg-slate-100']) {
+  background-color: rgba(51, 65, 85, 0.82) !important;
+}
+
+:global(.dark) .about-page :deep([class~='bg-blue-50']) {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+:global(.dark) .about-page :deep([class~='bg-purple-50']) {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+}
+
+:global(.dark) .about-page :deep([class~='border-slate-100']) {
+  border-color: rgba(71, 85, 105, 0.76) !important;
+}
+
+:global(.dark) .about-page :deep([class~='text-slate-900']),
+:global(.dark) .about-page :deep([class~='text-slate-800']) {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .about-page :deep([class~='text-slate-700']),
+:global(.dark) .about-page :deep([class~='text-slate-600']) {
+  color: #e2e8f0 !important;
+}
+
+:global(.dark) .about-page :deep([class~='text-slate-500']),
+:global(.dark) .about-page :deep([class~='text-slate-400']) {
+  color: #94a3b8 !important;
 }
 </style>

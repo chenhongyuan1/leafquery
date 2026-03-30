@@ -58,11 +58,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex flex-col pb-8">
+  <div class="notifications-page min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pb-8 transition-colors">
     <!-- Header -->
-    <div class="px-5 py-4 bg-white sticky top-0 z-30 shadow-sm flex items-center justify-between">
+    <div class="px-5 py-4 bg-white dark:bg-slate-900 sticky top-0 z-30 shadow-sm dark:shadow-[0_12px_32px_rgba(2,6,23,0.35)] flex items-center justify-between transition-colors">
       <div class="flex items-center">
-        <button @click="router.back()" class="w-10 h-10 -ml-2 flex items-center justify-center text-slate-800 active:bg-slate-100 rounded-full transition-colors mr-2">
+        <button @click="router.back()" class="w-10 h-10 -ml-2 flex items-center justify-center text-slate-800 dark:text-slate-100 active:bg-slate-100 dark:active:bg-slate-800 rounded-full transition-colors mr-2">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
@@ -90,8 +90,8 @@ onMounted(async () => {
           v-for="a in announcements" 
           :key="a.id" 
           @click="markAsRead(a)"
-          class="rounded-2xl p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border transition-all hover:shadow-md cursor-pointer active:scale-[0.98]"
-          :class="isRead(a.id) ? 'bg-white border-slate-100' : 'bg-blue-50/30 border-blue-100'"
+          class="rounded-2xl p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_12px_36px_rgba(2,6,23,0.3)] border transition-all hover:shadow-md cursor-pointer active:scale-[0.98]"
+          :class="isRead(a.id) ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'bg-blue-50/30 dark:bg-sky-500/10 border-blue-100 dark:border-sky-500/20'"
         >
           <div class="flex justify-between items-start mb-3">
             <div class="flex items-center gap-2">
@@ -124,8 +124,8 @@ onMounted(async () => {
     <!-- Notification Detail Modal -->
     <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="selectedItem = null"></div>
-      <div class="bg-white w-full sm:w-[90%] sm:rounded-[2rem] rounded-t-[2rem] h-[85%] sm:h-auto overflow-hidden relative z-10 shadow-2xl animate-slide-up flex flex-col">
-        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center relative">
+      <div class="bg-white dark:bg-slate-900 w-full sm:w-[90%] sm:rounded-[2rem] rounded-t-[2rem] h-[85%] sm:h-auto overflow-hidden relative z-10 shadow-2xl dark:shadow-[0_24px_70px_rgba(2,6,23,0.55)] animate-slide-up flex flex-col transition-colors">
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center relative">
            <button @click="selectedItem = null" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-600 rounded-full font-bold active:scale-90 transition-transform">✕</button>
            <span class="font-bold text-slate-800 absolute left-1/2 -translate-x-1/2">通知详情</span>
            <div class="w-8"></div>
@@ -150,5 +150,93 @@ onMounted(async () => {
 <style scoped>
 @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-</style>
 
+:global(.dark) .notifications-page {
+  background:
+    radial-gradient(circle at top, rgba(16, 185, 129, 0.16), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #0f172a 42%, #111827 100%);
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-white']) {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-slate-50']) {
+  background-color: rgba(30, 41, 59, 0.78) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-slate-100']) {
+  background-color: rgba(51, 65, 85, 0.82) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-blue-50/30']) {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-blue-50']) {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-red-50']) {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='bg-purple-50']) {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='border-slate-100']),
+:global(.dark) .notifications-page :deep([class~='border-slate-200']),
+:global(.dark) .notifications-page :deep([class~='border-slate-50']) {
+  border-color: rgba(71, 85, 105, 0.76) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='border-blue-100']) {
+  border-color: rgba(96, 165, 250, 0.28) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='border-blue-200']) {
+  border-color: rgba(96, 165, 250, 0.28) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='border-red-200']) {
+  border-color: rgba(248, 113, 113, 0.28) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='border-purple-200']) {
+  border-color: rgba(192, 132, 252, 0.28) !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='text-slate-900']),
+:global(.dark) .notifications-page :deep([class~='text-slate-800']) {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='text-slate-700']),
+:global(.dark) .notifications-page :deep([class~='text-slate-600']) {
+  color: #e2e8f0 !important;
+}
+
+:global(.dark) .notifications-page :deep([class~='text-slate-500']),
+:global(.dark) .notifications-page :deep([class~='text-slate-400']) {
+  color: #94a3b8 !important;
+}
+
+:global(.dark) .notifications-page :deep(.prose),
+:global(.dark) .notifications-page :deep(.prose p),
+:global(.dark) .notifications-page :deep(.prose li),
+:global(.dark) .notifications-page :deep(.prose strong) {
+  color: #e2e8f0 !important;
+}
+
+:global(.dark) .notifications-page h1,
+:global(.dark) .notifications-page h2,
+:global(.dark) .notifications-page h3 {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .notifications-page .text-slate-500,
+:global(.dark) .notifications-page .text-slate-400 {
+  color: #94a3b8 !important;
+}
+</style>

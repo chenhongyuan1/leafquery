@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useFavoritesStore } from '../stores/favorites'
+import { useFavoritesStore } from '../../stores/favorites'
 
 const router = useRouter()
 const favStore = useFavoritesStore()
@@ -58,7 +58,7 @@ const handleUnlike = (item) => {
 </script>
 
 <template>
-  <div class="px-4 pt-1 pb-8 min-h-screen flex flex-col relative bg-slate-50">
+  <div class="favorites-page px-4 pt-1 pb-8 min-h-screen flex flex-col relative bg-slate-50">
     <!-- Header -->
     <div class="flex items-center mb-6 pt-4 sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md pb-4">
       <button @click="goBack" class="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 active:scale-90 transition-transform relative z-10">
@@ -124,4 +124,47 @@ const handleUnlike = (item) => {
 .list-move, .list-enter-active, .list-leave-active { transition: all 0.4s ease; }
 .list-enter-from, .list-leave-to { opacity: 0; transform: translateX(30px) scale(0.9); }
 .list-leave-active { position: absolute; }
+
+:global(.dark) .favorites-page {
+  background:
+    radial-gradient(circle at top, rgba(16, 185, 129, 0.16), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #0f172a 42%, #111827 100%);
+}
+
+:global(.dark) .favorites-page :deep([class~='bg-white']),
+:global(.dark) .favorites-page :deep([class~='bg-slate-50/90']) {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='bg-slate-50']) {
+  background-color: rgba(30, 41, 59, 0.78) !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='bg-slate-100']) {
+  background-color: rgba(51, 65, 85, 0.82) !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='bg-red-50']) {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='border-slate-100']) {
+  border-color: rgba(71, 85, 105, 0.76) !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='text-slate-900']),
+:global(.dark) .favorites-page :deep([class~='text-slate-800']) {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='text-slate-700']),
+:global(.dark) .favorites-page :deep([class~='text-slate-600']) {
+  color: #e2e8f0 !important;
+}
+
+:global(.dark) .favorites-page :deep([class~='text-slate-500']),
+:global(.dark) .favorites-page :deep([class~='text-slate-400']),
+:global(.dark) .favorites-page :deep([class~='text-slate-300']) {
+  color: #94a3b8 !important;
+}
 </style>

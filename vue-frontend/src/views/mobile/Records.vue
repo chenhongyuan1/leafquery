@@ -94,7 +94,7 @@ const getEmoji = (name) => {
 </script>
 
 <template>
-  <div class="min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
+  <div class="records-page min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
     <!-- Header -->
     <div class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 py-4">
       <button @click="goBack" class="p-2 -ml-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all outline-none">
@@ -185,5 +185,77 @@ const getEmoji = (name) => {
 .custom-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+:global(.dark) .records-page {
+  background:
+    radial-gradient(circle at top, rgba(16, 185, 129, 0.16), transparent 34%),
+    linear-gradient(180deg, #020617 0%, #0f172a 42%, #111827 100%);
+}
+
+:global(.dark) .records-page :deep([class~='bg-white']),
+:global(.dark) .records-page :deep([class~='bg-white/80']) {
+  background-color: rgba(15, 23, 42, 0.88) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-slate-50']) {
+  background-color: rgba(30, 41, 59, 0.78) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-slate-100']) {
+  background-color: rgba(51, 65, 85, 0.82) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-green-100/40']) {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-blue-100/40']) {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-green-100']) {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-orange-100']) {
+  background-color: rgba(249, 115, 22, 0.18) !important;
+}
+
+:global(.dark) .records-page :deep([class~='bg-red-100']) {
+  background-color: rgba(239, 68, 68, 0.18) !important;
+}
+
+:global(.dark) .records-page :deep([class~='border-slate-50']),
+:global(.dark) .records-page :deep([class~='border-slate-100']),
+:global(.dark) .records-page :deep([class~='border-slate-200']) {
+  border-color: rgba(71, 85, 105, 0.76) !important;
+}
+
+:global(.dark) .records-page :deep([class~='border-green-200']) {
+  border-color: rgba(52, 211, 153, 0.28) !important;
+}
+
+:global(.dark) .records-page :deep([class~='border-orange-200']) {
+  border-color: rgba(251, 146, 60, 0.28) !important;
+}
+
+:global(.dark) .records-page :deep([class~='border-red-200']) {
+  border-color: rgba(248, 113, 113, 0.28) !important;
+}
+
+:global(.dark) .records-page :deep([class~='text-slate-900']),
+:global(.dark) .records-page :deep([class~='text-slate-800']) {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .records-page :deep([class~='text-slate-700']),
+:global(.dark) .records-page :deep([class~='text-slate-600']) {
+  color: #e2e8f0 !important;
+}
+
+:global(.dark) .records-page :deep([class~='text-slate-500']),
+:global(.dark) .records-page :deep([class~='text-slate-400']) {
+  color: #94a3b8 !important;
 }
 </style>

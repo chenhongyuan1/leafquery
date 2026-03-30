@@ -9,13 +9,13 @@ const errorMsg = ref('')
 
 const emit = defineEmits(['scan-complete'])
 
-// 点击"开始识别"按钮 → 触发隐藏的 file input
+// 点击“开始识别”按钮时，触发隐藏的 file input
 const startScan = () => {
   errorMsg.value = ''
   fileInput.value?.click()
 }
 
-// 用户选择/拍摄图片后
+// 用户选择或拍摄图片后
 const onFileSelected = async (event) => {
   const file = event.target.files?.[0]
   if (!file) return
@@ -34,18 +34,43 @@ const onFileSelected = async (event) => {
       timeout: 30000
     })
 
-    // 模拟最少 2 秒扫描动画，让用户看到效果
+    // 模拟最少 2 秒扫描动画，让用户看到反馈
     await new Promise(resolve => setTimeout(resolve, 2000))
 
     isScanning.value = false
+    
+    // 解析新的嵌套返回结构 { prediction, report }
+    const predictionRaw = response.data.prediction || response.data
+    const savedImageUrl = response.data.imageUrl || previewUrl.value
+    
+    let finalPestName = predictionRaw.pest_name || predictionRaw.pestName || predictionRaw.primary_target_zh || predictionRaw.primaryTargetZh || 'unknown'
+    if (String(finalPestName).toLowerCase() === 'unknown' || finalPestName === '未识别') {
+      finalPestName = '未能识别出具体病虫害'
+    }
+
     emit('scan-complete', {
-      pestName: response.data.pest_name || response.data.pestName || 'unknown',
-      confidence: response.data.confidence || 0,
-      imageUrl: previewUrl.value
+      pestName: finalPestName,
+      confidence: predictionRaw.confidence || predictionRaw.primary_confidence || predictionRaw.primaryConfidence || 0,
+      primaryTargetZh: predictionRaw.primary_target_zh || predictionRaw.primaryTargetZh || finalPestName,
+      primaryConfidence: predictionRaw.primary_confidence || predictionRaw.primaryConfidence || predictionRaw.confidence || 0,
+      sceneType: predictionRaw.scene_type || predictionRaw.sceneType || 'single',
+      classCount: predictionRaw.class_count ?? predictionRaw.classCount ?? 0,
+      targetCount: predictionRaw.target_count ?? predictionRaw.targetCount ?? 0,
+      classNamesZh: predictionRaw.class_names_zh || predictionRaw.classNamesZh || [],
+      detectedSummary: predictionRaw.detected_summary || predictionRaw.detectedSummary || [],
+      report: response.data.report || '',
+      imageUrl: savedImageUrl
     })
   } catch (err) {
     isScanning.value = false
-    errorMsg.value = err.response?.data?.error || '识别失败，请重试'
+    
+    let errMsg = err.response?.data?.error || err.response?.data?.message || err.message || '识别失败，请重试'
+    // 翻译常见的英文服务端/网络报错
+    if (errMsg.includes('Network Error')) errMsg = '网络连接失败，请检查您的网络'
+    if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errMsg = '请求超时，服务器处理过慢'
+    if (errMsg.includes('500') || errMsg.includes('Internal Server Error')) errMsg = '服务器内部错误，请稍后再试'
+    
+    errorMsg.value = errMsg
     console.error('识别请求失败:', err)
   }
 
@@ -58,13 +83,13 @@ defineExpose({ startScan, isScanning })
 
 <template>
   <div class="absolute inset-0 w-full h-full overflow-hidden rounded-[2rem] bg-slate-950 bg-aurora">
-    <!-- Aurora 动态光晕 (Blobs) -->
-    <!-- 将透明度提高，模糊半径稍微降低，让蓝光和紫光能透出来，避免全被底层的墨绿色吃掉 -->
+    <!-- Aurora 动态光斑 -->
+    <!-- 适当提高透明度和层次感，让背景更有空间感 -->
     <div class="absolute top-[0%] left-[0%] w-[50%] h-[50%] bg-emerald-500/30 rounded-full mix-blend-screen filter blur-[60px] animate-blob"></div>
     <div class="absolute bottom-[0%] right-[0%] w-[50%] h-[50%] bg-blue-500/40 rounded-full mix-blend-screen filter blur-[60px] animate-blob animation-delay-2000"></div>
-    <!-- 将紫色光团调大，大大增强其不透明度达到 /60，往中间中心靠拢一点 -->
+    <!-- 补一层紫色光团，让画面更有纵深 -->
     <div class="absolute top-[10%] right-[30%] w-[60%] h-[60%] bg-purple-500/60 rounded-full mix-blend-screen filter blur-[70px] animate-blob animation-delay-4000"></div>
-    <!-- 真实可交互的文件选择器（透明覆盖整个区域，避免浏览器拦截 programmatic click） -->
+    <!-- 透明文件选择器覆盖整个区域，避免浏览器拦截程序化点击 -->
     <input
       type="file"
       accept="image/*"
@@ -73,12 +98,12 @@ defineExpose({ startScan, isScanning })
       @change="onFileSelected"
     />
 
-    <!-- 相机预览 / 拍摄图片预览 -->
+    <!-- 相机预览 / 图片预览 -->
     <div class="absolute inset-0">
       <img
         v-if="previewUrl"
         :src="previewUrl"
-        alt="拍摄预览"
+        alt="识别预览"
         class="w-full h-full object-cover transition-transform duration-500"
         :class="isScanning ? 'scale-105' : 'scale-100'"
       />
@@ -99,26 +124,26 @@ defineExpose({ startScan, isScanning })
     <!-- 错误提示 -->
     <div v-if="errorMsg" class="absolute bottom-20 inset-x-0 flex justify-center z-20">
       <div class="bg-red-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-lg animate-bounce-in">
-        ⚠️ {{ errorMsg }}
+        提示：{{ errorMsg }}
       </div>
     </div>
 
-    <!-- 视觉提示（不拦截点击，让底层透明 input 接收） -->
+    <!-- 视觉提示层，不拦截点击，让底层 input 接收事件 -->
     <div v-if="!isScanning" class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center pointer-events-none z-40">
       <div class="relative flex flex-col items-center justify-center animate-tap mt-4">
         <!-- 脉冲波纹动画 -->
         <div class="absolute w-20 h-20 bg-green-500/40 rounded-full animate-ping -top-2"></div>
-        <!-- 鼠标点击带射线的 SVG (代表 Tap/Click 动作) -->
+        <!-- 点击提示图标 -->
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-16 h-16 text-white drop-shadow-lg z-10">
           <path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59" />
         </svg>
         <span class="mt-6 text-white/90 font-medium tracking-wide drop-shadow-md bg-black/20 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-sm">
-          点击该区域进行识别
+          点击该区域开始识别
         </span>
       </div>
     </div>
 
-    <!-- 扫描中提示文字 -->
+    <!-- 扫描中文案 -->
     <div v-else class="absolute bottom-8 w-full text-center text-green-300 font-mono text-sm tracking-wider animate-pulse">
       AI 正在分析叶片特征...
     </div>
@@ -183,3 +208,4 @@ defineExpose({ startScan, isScanning })
   animation-delay: 4s;
 }
 </style>
+

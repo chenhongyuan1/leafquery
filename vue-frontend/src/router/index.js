@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Identification from '../views/Identification.vue'
-import Discovery from '../views/Discovery.vue'
-import Prediction from '../views/Prediction.vue'
-import Profile from '../views/Profile.vue'
-import About from '../views/About.vue'
-import Records from '../views/Records.vue'
+import Identification from '../views/mobile/Identification.vue'
+import Discovery from '../views/mobile/Discovery.vue'
+import Prediction from '../views/mobile/Prediction.vue'
+import Profile from '../views/mobile/Profile.vue'
+import About from '../views/mobile/About.vue'
+import Records from '../views/mobile/Records.vue'
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -44,25 +44,25 @@ const router = createRouter({
         {
             path: '/favorites',
             name: 'favorites',
-            component: () => import('../views/Favorites.vue'),
+            component: () => import('../views/mobile/Favorites.vue'),
             meta: { hideTabBar: true }
         },
         {
             path: '/farm',
             name: 'farm',
-            component: () => import('../views/Farm.vue'),
+            component: () => import('../views/mobile/Farm.vue'),
             meta: { hideTabBar: true }
         },
         {
             path: '/settings',
             name: 'settings',
-            component: () => import('../views/Settings.vue'),
+            component: () => import('../views/mobile/Settings.vue'),
             meta: { hideTabBar: true }
         },
         {
             path: '/notifications',
             name: 'notifications',
-            component: () => import('../views/Notifications.vue'),
+            component: () => import('../views/mobile/Notifications.vue'),
             meta: { hideTabBar: true }
         }
     ],

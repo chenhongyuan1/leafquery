@@ -1,41 +1,84 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import ScanOverlay from '../components/ScanOverlay.vue'
 import axios from 'axios'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../../stores/settings'
+import {
+  formatConfidencePercent,
+  getPrimaryDisplayName,
+  getReportTitle,
+  getSceneMeta,
+  normalizeClassNames,
+  normalizeDetectionSummary
+} from '../../utils/detectionPresentationClean'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
+
+// ===== Category Selection (先选后扫) =====
+const categoryOptions = [
+  { key: 'rice',   label: '水稻', value: '水稻', icon: '🌾', group: 'disease' },
+  { key: 'corn',   label: '玉米', value: '玉米', icon: '🌽', group: 'disease' },
+  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌿', group: 'disease' },
+  { key: 'other',  label: '其他', value: '其他', icon: '🍃', group: 'disease' },
+  { key: 'pest',   label: '虫害', value: '虫害', icon: '🐛', group: 'pest'    },
+]
+const selectedCategories = ref([])
+const toggleCategory = (value) => {
+  const idx = selectedCategories.value.indexOf(value)
+  if (idx >= 0) {
+    selectedCategories.value.splice(idx, 1)
+  } else {
+    selectedCategories.value.push(value)
+  }
+}
+const hasSelection = computed(() => selectedCategories.value.length > 0)
+const selectionConfirmed = ref(false)
+const confirmSelection = () => {
+  if (hasSelection.value) {
+    selectionConfirmed.value = true
+  }
+}
+
+// ===== Scan State =====
+const fileInput = ref(null)
+const previewUrl = ref(null)
+const analysisStage = ref('')  // '' → 'yolo' → 'review' → 'done'
+const yoloUsed = ref(false)
+const reviewRequired = ref(false)
 
 const scanRef = ref(null)
 const isResultReady = ref(false)
 const showDetail = ref(false)
 const isAnalyzing = ref(false)
+const isDiagnosing = ref(false)
 const isSending = ref(false)
 const messages = ref([]) 
 const userInput = ref('')
+const selectedCropNames = ref([])
+const selectedTargetNames = ref([])
 
-// TTS 语音播放状态
+
+// TTS 璇煶鎾斁鐘舵€?
 const isSpeaking = ref(false)
 const isTtsLoading = ref(false)
 let currentAudio = null
 
 const speakLastReply = async () => {
-  // 如果正在播放，停止
+  // 濡傛灉姝ｅ湪鎾斁锛屽仠姝?
   if (isSpeaking.value) {
     stopSpeaking()
     return
   }
 
-  // 取最后一条 assistant 消息
+  // 鍙栨渶鍚庝竴鏉?assistant 娑堟伅
   const lastAssistant = [...messages.value].reverse().find(m => m.role === 'assistant')
   if (!lastAssistant || !lastAssistant.content) {
     showToast('没有可以朗读的内容', 'warning')
     return
   }
 
-  // 移除 Markdown 格式符号，只保留纯文本
+  // 绉婚櫎 Markdown 鏍煎紡绗﹀彿锛屽彧淇濈暀绾枃鏈?
   const plainText = lastAssistant.content
     .replace(/[#*_`~>\-|]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -53,12 +96,12 @@ const speakLastReply = async () => {
     currentAudio = new Audio(url)
     currentAudio.onplay = () => { isSpeaking.value = true; isTtsLoading.value = false }
     currentAudio.onended = () => { stopSpeaking() }
-    currentAudio.onerror = () => { stopSpeaking(); showToast('音频播放失败', 'error') }
+    currentAudio.onerror = () => { stopSpeaking(); showToast('闊抽鎾斁澶辫触', 'error') }
     currentAudio.play()
   } catch (err) {
     console.error('TTS failed:', err)
     isTtsLoading.value = false
-    showToast('语音合成失败，请稍后再试', 'error')
+    showToast('璇煶鍚堟垚澶辫触锛岃绋嶅悗鍐嶈瘯', 'error')
   }
 }
 
@@ -122,11 +165,11 @@ const removePendingGeneralImage = () => {
   pendingGeneralImage.value = ''
 }
 
-// 语音转文字 + 方言识别 (Web Audio API PCM 采集 + WAV 编码 → 后端豆包 SeedASR)
+// 璇煶杞枃瀛?+ 鏂硅█璇嗗埆 (Web Audio API PCM 閲囬泦 + WAV 缂栫爜 鈫?鍚庣璞嗗寘 SeedASR)
 const isRecording = ref(false)
 const isAudioProcessing = ref(false)
 
-// Toast 弹窗通知系统
+// Toast 寮圭獥閫氱煡绯荤粺
 const toastMessage = ref('')
 const toastType = ref('info') // 'info' | 'error' | 'warning'
 const toastVisible = ref(false)
@@ -149,16 +192,16 @@ let analyserNode = null
 let animationFrameId = null
 let orbCanvas = null
 let orbCtx = null
-let orbDepth = 0.3 // CodePen 默认值
+let orbDepth = 0.3 // CodePen 榛樿鍊?
 let smoothedDepth = 0.3
 let prevEnergy = 0
 let smoothedEnergy = 0
-let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // sin 波相位
+let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // sin 娉㈢浉浣?
 let stream = null
 let pcmBuffers = []
 
-// ============ Organic AI Orb Canvas Renderer (忠实复刻 CodePen 数学公式) ============
-// CodePen 原版的 7 个控制点相位偏移
+// ============ Organic AI Orb Canvas Renderer (蹇犲疄澶嶅埢 CodePen 鏁板鍏紡) ============
+// CodePen 鍘熺増鐨?7 涓帶鍒剁偣鐩镐綅鍋忕Щ
 const BLOB_POINTS = [
   { angle: 0, p1: 0, p2: 0, p3: 0 },
   { angle: 51.43, p1: 137.5, p2: 222.5, p3: 360.1 },
@@ -170,7 +213,7 @@ const BLOB_POINTS = [
 ]
 const DEG = Math.PI / 180
 
-// 构建贝塞尔路径的辅助函数 (复用)
+// 鏋勫缓璐濆灏旇矾寰勭殑杈呭姪鍑芥暟 (澶嶇敤)
 function buildBlobPath(ctx, cx, cy, baseR, depth, phases) {
   const pts = BLOB_POINTS.map(pt => {
     const rand = 0.5 + 0.5 * (
@@ -196,15 +239,15 @@ function buildBlobPath(ctx, cx, cy, baseR, depth, phases) {
 
 function drawOrb(ctx, w, h, depth, phases) {
   const cx = w / 2, cy = h / 2
-  // CodePen 原版: transform: scale(calc(1 + var(--depth)))
-  // depth 越大 → 整体越大 + 形变越剧烈 (向外膨胀 + 不规则震动)
+  // CodePen 鍘熺増: transform: scale(calc(1 + var(--depth)))
+  // depth 瓒婂ぇ 鈫?鏁翠綋瓒婂ぇ + 褰㈠彉瓒婂墽鐑?(鍚戝鑶ㄨ儉 + 涓嶈鍒欓渿鍔?
   const scaleFactor = 0.5 + depth * 0.5
   const baseR = Math.min(w, h) / 2 * 0.85 * scaleFactor
 
   ctx.clearRect(0, 0, w, h)
 
-  // ======== 第 1 层: 外发光 Glow (feGaussianBlur 模拟) ========
-  // 先画一次带大模糊阴影的填充，然后清除实体只保留光晕
+  // ======== 绗?1 灞? 澶栧彂鍏?Glow (feGaussianBlur 妯℃嫙) ========
+  // 鍏堢敾涓€娆″甫澶фā绯婇槾褰辩殑濉厖锛岀劧鍚庢竻闄ゅ疄浣撳彧淇濈暀鍏夋檿
   ctx.save()
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
   ctx.shadowColor = 'hsla(200, 90%, 70%, 0.6)'
@@ -215,34 +258,34 @@ function drawOrb(ctx, w, h, depth, phases) {
   ctx.fill()
   ctx.restore()
 
-  // ======== 第 2 层: 主体填充 (Mesh Gradient) ========
+  // ======== 绗?2 灞? 涓讳綋濉厖 (Mesh Gradient) ========
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
 
-  // 网格渐变填充 (绿色植物主题配色)
+  // 缃戞牸娓愬彉濉厖 (缁胯壊妞嶇墿涓婚閰嶈壊)
   const g1 = ctx.createRadialGradient(cx * 1.4, cy * 0.5, 0, cx, cy, baseR * 1.2)
-  g1.addColorStop(0, 'hsla(160, 90%, 75%, 1)')  // 亮薄荷绿
+  g1.addColorStop(0, 'hsla(160, 90%, 75%, 1)')  // 浜杽鑽风豢
   g1.addColorStop(1, 'hsla(160, 80%, 60%, 0)')
   
   const g2 = ctx.createRadialGradient(cx * 0.4, cy * 1.5, 0, cx, cy, baseR * 1.1)
-  g2.addColorStop(0, 'hsla(140, 70%, 55%, 0.8)')  // 翠绿
+  g2.addColorStop(0, 'hsla(140, 70%, 55%, 0.8)')  // 缈犵豢
   g2.addColorStop(1, 'hsla(140, 70%, 55%, 0)')
 
   const g3 = ctx.createRadialGradient(cx * 0.6, cy * 0.3, 0, cx, cy, baseR)
-  g3.addColorStop(0, 'hsla(180, 65%, 60%, 1)')  // 青绿
+  g3.addColorStop(0, 'hsla(180, 65%, 60%, 1)')  // 闈掔豢
   g3.addColorStop(1, 'hsla(150, 62%, 50%, 0)')
 
-  // 底色
+  // 搴曡壊
   ctx.fillStyle = 'hsla(150, 62%, 73%, 1)'
   ctx.fill()
-  // 叠加渐变
+  // 鍙犲姞娓愬彉
   ctx.save()
   ctx.clip()
   ctx.fillStyle = g1; ctx.fill()
   ctx.fillStyle = g2; ctx.fill()
   ctx.fillStyle = g3; ctx.fill()
 
-  // ======== 第 3 层: 噪点质感 Film Grain (feTurbulence 模拟) ========
-  // 使用 offscreen canvas 生成噪点，再通过 drawImage 叠加（drawImage 尊重 clip）
+  // ======== 绗?3 灞? 鍣偣璐ㄦ劅 Film Grain (feTurbulence 妯℃嫙) ========
+  // 浣跨敤 offscreen canvas 鐢熸垚鍣偣锛屽啀閫氳繃 drawImage 鍙犲姞锛坉rawImage 灏婇噸 clip锛?
   if (!drawOrb._grainCanvas) {
     drawOrb._grainCanvas = document.createElement('canvas')
     drawOrb._grainCanvas.width = w
@@ -257,7 +300,7 @@ function drawOrb(ctx, w, h, depth, phases) {
   }
   gc.putImageData(gImg, 0, 0)
   
-  // 在已裁剪的主 canvas 上用 overlay 混合模式绘制噪点
+  // 鍦ㄥ凡瑁佸壀鐨勪富 canvas 涓婄敤 overlay 娣峰悎妯″紡缁樺埗鍣偣
   ctx.globalCompositeOperation = 'overlay'
   ctx.drawImage(drawOrb._grainCanvas, 0, 0)
 
@@ -267,13 +310,13 @@ function drawOrb(ctx, w, h, depth, phases) {
 function startOrbAnimation(dataArray) {
   const render = () => {
     if (!stream) return
-    // 更新相位 (与 CodePen 一致的速率: 7s, 11s, 13s 周期)
+    // 鏇存柊鐩镐綅 (涓?CodePen 涓€鑷寸殑閫熺巼: 7s, 11s, 13s 鍛ㄦ湡)
     orbPhases.s1 += (2 * Math.PI) / (7 * 60)
     orbPhases.s2 += (2 * Math.PI) / (11 * 60)
     orbPhases.s3 += (2 * Math.PI) / (13 * 60)
     orbPhases.rotation += (2 * Math.PI) / (20 * 60)
 
-    // 音频分析 (与 CodePen JS 完全一致的 RMS 能量检测)
+    // 闊抽鍒嗘瀽 (涓?CodePen JS 瀹屽叏涓€鑷寸殑 RMS 鑳介噺妫€娴?
     if (analyserNode) {
       analyserNode.getByteTimeDomainData(dataArray)
       let sumSq = 0
@@ -303,7 +346,7 @@ function startOrbAnimation(dataArray) {
   render()
 }
 
-// 将 Float32 PCM 样本编码为标准 WAV 文件
+// 灏?Float32 PCM 鏍锋湰缂栫爜涓烘爣鍑?WAV 鏂囦欢
 const encodeWAV = (samples, sampleRate) => {
   const buffer = new ArrayBuffer(44 + samples.length * 2)
   const view = new DataView(buffer)
@@ -321,7 +364,7 @@ const encodeWAV = (samples, sampleRate) => {
   view.setUint16(34, 16, true)       // bits per sample
   writeStr(36, 'data')
   view.setUint32(40, samples.length * 2, true)
-  // 写入 16-bit PCM 样本
+  // 鍐欏叆 16-bit PCM 鏍锋湰
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]))
     view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
@@ -329,7 +372,7 @@ const encodeWAV = (samples, sampleRate) => {
   return new Blob([buffer], { type: 'audio/wav' })
 }
 
-// 将 48kHz 下采样到 16kHz
+// 灏?48kHz 涓嬮噰鏍峰埌 16kHz
 const downsample = (buffer, fromRate, toRate) => {
   if (fromRate === toRate) return buffer
   const ratio = fromRate / toRate
@@ -352,7 +395,7 @@ const startRecording = async (target) => {
     // Web Audio Analyzer for Organic Orb Reactivity
     analyserNode = audioContext.createAnalyser()
     analyserNode.fftSize = 256
-    // 我们主要关注人声频率，设置平滑度让线条更少抖动
+    // 鎴戜滑涓昏鍏虫敞浜哄０棰戠巼锛岃缃钩婊戝害璁╃嚎鏉℃洿灏戞姈鍔?
     analyserNode.smoothingTimeConstant = 0.8
     sourceNode.connect(analyserNode)
     
@@ -362,7 +405,7 @@ const startRecording = async (target) => {
     prevEnergy = 0
     smoothedEnergy = 0
     
-    // 等待 Vue DOM 更新后获取 Canvas
+    // 绛夊緟 Vue DOM 鏇存柊鍚庤幏鍙?Canvas
     setTimeout(() => {
       orbCanvas = document.getElementById('orb-canvas')
       if (orbCanvas) {
@@ -401,21 +444,21 @@ const stopRecording = async () => {
   if (sourceNode) { sourceNode.disconnect(); sourceNode = null }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
 
-  // 合并所有 PCM buffer
+  // 鍚堝苟鎵€鏈?PCM buffer
   const totalLength = pcmBuffers.reduce((acc, b) => acc + b.length, 0)
   const merged = new Float32Array(totalLength)
   let offset = 0
   for (const buf of pcmBuffers) { merged.set(buf, offset); offset += buf.length }
   pcmBuffers = []
 
-  // 下采样到 16kHz 并编码为 WAV
+  // 涓嬮噰鏍峰埌 16kHz 骞剁紪鐮佷负 WAV
   const actualRate = audioContext ? audioContext.sampleRate : 16000
   const samples16k = downsample(merged, actualRate, 16000)
   if (audioContext) { audioContext.close(); audioContext = null }
 
   const wavBlob = encodeWAV(samples16k, 16000)
   
-  // 发送到后端
+  // 鍙戦€佸埌鍚庣
   isAudioProcessing.value = true
   const formData = new FormData()
   formData.append('audio', wavBlob, 'recording.wav')
@@ -426,12 +469,12 @@ const stopRecording = async () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     const text = response.data.text || ''
-    // 后端将所有错误/状态消息都作为 text 返回，需要过滤
+    // 鍚庣灏嗘墍鏈夐敊璇?鐘舵€佹秷鎭兘浣滀负 text 杩斿洖锛岄渶瑕佽繃婊?
     const backendErrorPrefixes = [
-      '请在 application',
-      '语音未识别到有效内容',
-      '语音识别超时',
-      '语音识别失败',
+      '璇峰湪 application',
+      '璇煶鏈瘑鍒埌鏈夋晥鍐呭',
+      '璇煶璇嗗埆瓒呮椂',
+      '璇煶璇嗗埆澶辫触',
     ]
     const isBackendError = backendErrorPrefixes.some(prefix => text.startsWith(prefix))
     
@@ -442,12 +485,12 @@ const stopRecording = async () => {
         userInput.value = (userInput.value + ' ' + text).trim()
       }
     } else {
-      // 所有后端错误/空结果统一走 Toast
-      showToast(isBackendError ? text : '语音未识别到有效内容，请重试', isBackendError && text.includes('失败') ? 'error' : 'warning', 4000)
+      // 鎵€鏈夊悗绔敊璇?绌虹粨鏋滅粺涓€璧?Toast
+      showToast(isBackendError ? text : '璇煶鏈瘑鍒埌鏈夋晥鍐呭锛岃閲嶈瘯', isBackendError && text.includes('澶辫触') ? 'error' : 'warning', 4000)
     }
   } catch (err) {
     console.error("Speech to text translation failed:", err)
-    showToast('语音识别失败，请重试', 'error')
+    showToast('璇煶璇嗗埆澶辫触锛岃閲嶈瘯', 'error')
   } finally {
     isAudioProcessing.value = false
   }
@@ -462,7 +505,7 @@ const handleVoiceStop = () => {
   if (isRecording.value) stopRecording()
 }
 
-// 点击切换录音（对话页麦克风按钮使用）
+// 鐐瑰嚮鍒囨崲褰曢煶锛堝璇濋〉楹﹀厠椋庢寜閽娇鐢級
 const toggleVoiceInput = (target) => {
   if (isRecording.value === target) {
     stopRecording()
@@ -471,14 +514,28 @@ const toggleVoiceInput = (target) => {
   }
 }
 
-// 真实 AI 结果数据
-const detectionResult = ref({
+const createEmptyDetectionResult = () => ({
   pestName: '',
   confidence: 0,
-  imageUrl: ''
+  imageUrl: '',
+  primaryTarget: '',
+  primaryTargetZh: '',
+  primaryConfidence: 0,
+  sceneType: 'single',
+  classNamesZh: [],
+  detectedSummary: [],
+  report: ''
 })
+const detectionResult = ref(createEmptyDetectionResult())
 
-// 识别历史记录
+const sceneBadgeClassMap = {
+  single: 'bg-emerald-100 text-emerald-700',
+  multi: 'bg-amber-100 text-amber-700',
+  uncertain: 'bg-orange-100 text-orange-700',
+  empty: 'bg-slate-100 text-slate-600'
+}
+
+// 璇嗗埆鍘嗗彶璁板綍
 const historyItems = ref(JSON.parse(localStorage.getItem('leafquery_history') || '[]'))
 
 onMounted(async () => {
@@ -503,7 +560,7 @@ onMounted(async () => {
     console.error('Failed to sync history from cloud', e)
   }
 
-  // 检查是否有未读通知 → 显示红点
+  // 妫€鏌ユ槸鍚︽湁鏈閫氱煡 鈫?鏄剧ず绾㈢偣
   try {
     const { data } = await axios.get('/api/discovery/announcements')
     if (data.code === 200 && data.data.length > 0) {
@@ -512,10 +569,10 @@ onMounted(async () => {
       hasNewNotification.value = hasUnread
     }
   } catch (e) {
-    // 静默失败，不影响主功能
+    // 闈欓粯澶辫触锛屼笉褰卞搷涓诲姛鑳?
   }
 
-  // 检查是否有弹窗公告
+  // 妫€鏌ユ槸鍚︽湁寮圭獥鍏憡
   try {
     const { data: popupData } = await axios.get('/api/discovery/announcements/popup')
     if (popupData.code === 200 && popupData.data.length > 0) {
@@ -526,7 +583,7 @@ onMounted(async () => {
       }
     }
   } catch (e) {
-    // 静默失败
+    // 闈欓粯澶辫触
   }
 })
 
@@ -539,10 +596,28 @@ function dismissPopup() {
   }
 }
 
-// 置信度百分比显示
+// 缃俊搴︾櫨鍒嗘瘮鏄剧ず
 const confidencePercent = computed(() => {
   return (detectionResult.value.confidence * 100).toFixed(1)
 })
+
+const summaryItems = computed(() => normalizeDetectionSummary(detectionResult.value.detectedSummary))
+const detectedClassNames = computed(() => normalizeClassNames(
+  detectionResult.value.classNamesZh,
+  detectionResult.value.detectedSummary
+))
+const sceneMeta = computed(() => getSceneMeta(detectionResult.value.sceneType))
+const sceneBadgeClasses = computed(() => sceneBadgeClassMap[detectionResult.value.sceneType] || sceneBadgeClassMap.single)
+const primaryDisplayName = computed(() => getPrimaryDisplayName(detectionResult.value))
+const detailTitle = computed(() => getReportTitle(detectionResult.value))
+const diagnosisContextName = computed(() => {
+  if (detectionResult.value.pestName === '通用农业咨询') return detectionResult.value.pestName
+  if (detectionResult.value.sceneType === 'multi') {
+    return detectedClassNames.value.join('、') || primaryDisplayName.value
+  }
+  return primaryDisplayName.value
+})
+const formatConfidence = (value, digits = 1) => formatConfidencePercent(value, digits)
 
 // 根据置信度返回颜色方案
 const confidenceColor = computed(() => {
@@ -552,28 +627,19 @@ const confidenceColor = computed(() => {
   return { text: 'text-red-500', bg: 'bg-red-500', glow: 'shadow-red-500/40', icon: 'bg-red-50 text-red-500', border: 'border-red-500' }
 })
 
-const handleScanComplete = async (result) => {
-  detectionResult.value = result
-  isResultReady.value = true
-  showDetail.value = false
-  messages.value = []
-
+const persistFinalizedDetection = async result => {
   const newRecord = {
     id: Date.now(),
     name: result.pestName,
     confidence: result.confidence,
-    time: Date.now(), // Store as timestamp for better sorting/formatting later
+    time: Date.now(),
     imageUrl: result.imageUrl
   }
 
-  // 添加到历史记录
   historyItems.value.unshift(newRecord)
-
-  // 首页栏最多显示 10 条, localStorage 最多存 100 条
   if (historyItems.value.length > 100) historyItems.value.pop()
   localStorage.setItem('leafquery_history', JSON.stringify(historyItems.value))
 
-  // 同步至云端
   try {
     const userStr = localStorage.getItem('user')
     if (userStr) {
@@ -588,7 +654,132 @@ const handleScanComplete = async (result) => {
       }
     }
   } catch (e) {
-    console.error("Failed to sync record to cloud:", e)
+    console.error('Failed to sync record to cloud:', e)
+  }
+}
+
+// ===== 先选后扫 — 拍照/上传触发一步到位识别 =====
+const triggerScan = () => {
+  if (!hasSelection.value) {
+    showToast('请先选择至少一个检测类别', 'warning')
+    return
+  }
+  fileInput.value?.click()
+}
+
+const onScanFileSelected = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+  event.target.value = ''
+
+  previewUrl.value = URL.createObjectURL(file)
+  isAnalyzing.value = true
+  analysisStage.value = 'yolo'
+  isResultReady.value = true
+  showDetail.value = false
+  messages.value = []
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('categories', selectedCategories.value.join(','))
+    formData.append('locationId', '101010100')
+
+    const response = await axios.post('/api/pest/identify', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000
+    })
+
+    const predictionRaw = response.data.prediction || {}
+    const savedImageUrl = response.data.image_url || previewUrl.value
+    yoloUsed.value = response.data.yolo_used !== false
+    reviewRequired.value = response.data.review_required === true
+    const reportError = response.data.report_error || ''
+    const reviewResult = response.data.review_result || ''
+
+    let finalPestName = predictionRaw.pest_name || predictionRaw.pestName ||
+                        predictionRaw.primary_target_zh || predictionRaw.primaryTargetZh || '未识别'
+    if (String(finalPestName).toLowerCase() === 'unknown' || finalPestName === '未识别') {
+      finalPestName = '未能识别出具体病虫害'
+    }
+
+    detectionResult.value = {
+      pestName: finalPestName,
+      confidence: predictionRaw.confidence || predictionRaw.primary_confidence || 0,
+      primaryTargetZh: predictionRaw.primary_target_zh || predictionRaw.primaryTargetZh || finalPestName,
+      primaryConfidence: predictionRaw.primary_confidence || predictionRaw.primaryConfidence || 0,
+      sceneType: predictionRaw.scene_type || predictionRaw.sceneType || (yoloUsed.value ? 'single' : 'empty'),
+      classNamesZh: predictionRaw.class_names_zh || predictionRaw.classNamesZh || [],
+      detectedSummary: predictionRaw.detected_summary || predictionRaw.detectedSummary || [],
+      report: '',  // 阶段 3 按需生成
+      reviewResult: reviewResult,
+      imageUrl: savedImageUrl,
+      predictionJson: JSON.stringify(predictionRaw),
+      userCategories: selectedCategories.value.join(',')
+    }
+
+    // 动画阶段推进
+    if (reviewRequired.value) {
+      analysisStage.value = 'review'
+      await new Promise(r => setTimeout(r, 800))
+    }
+    analysisStage.value = 'done'
+
+    // 复核失败提示
+    if (reportError) {
+      showToast('YOLO 识别完成，但 AI 复核失败', 'warning', 5000)
+    }
+
+    // 不自动生成报告，展示结果摘要
+    messages.value = []
+    isResultReady.value = true
+    showDetail.value = false
+
+    await persistFinalizedDetection(detectionResult.value)
+    scrollToBottom()
+  } catch (err) {
+    console.error('Identification failed', err)
+    showToast(err.response?.data?.error || '识别失败，请检查网络或服务配置', 'error')
+    isResultReady.value = false
+  } finally {
+    isAnalyzing.value = false
+    analysisStage.value = ''
+  }
+}
+
+// ====== 阶段 3：按需生成诊断报告 ======
+const isGeneratingReport = ref(false)
+const generateReport = async () => {
+  if (isGeneratingReport.value) return
+  isGeneratingReport.value = true
+
+  try {
+    const params = new URLSearchParams()
+    params.append('imageUrl', detectionResult.value.imageUrl || '')
+    params.append('categories', detectionResult.value.userCategories || selectedCategories.value.join(','))
+    params.append('locationId', '101010100')
+    if (detectionResult.value.predictionJson) {
+      params.append('predictionJson', detectionResult.value.predictionJson)
+    }
+    if (detectionResult.value.reviewResult) {
+      params.append('reviewResult', detectionResult.value.reviewResult)
+    }
+
+    const response = await axios.post('/api/pest/diagnose', params, { timeout: 120000 })
+    const report = response.data.report || ''
+
+    detectionResult.value.report = report
+    messages.value = report
+      ? [{ role: 'assistant', content: report }]
+      : [{ role: 'assistant', content: '诊断报告生成失败，请稍后重试。' }]
+
+    showDetail.value = true
+    scrollToBottom()
+  } catch (err) {
+    console.error('Report generation failed', err)
+    showToast('诊断报告生成失败：' + (err.response?.data?.error || '请检查网络'), 'error')
+  } finally {
+    isGeneratingReport.value = false
   }
 }
 
@@ -596,40 +787,17 @@ const closeResult = () => {
   stopSpeaking()
   isResultReady.value = false
   showDetail.value = false
+  messages.value = []
+  detectionResult.value = createEmptyDetectionResult()
+  analysisStage.value = ''
 }
-
-const fetchAiAnalysis = async () => {
-  if (detectionResult.value.pestName === 'unknown' || detectionResult.value.pestName === '未识别') {
-    showToast('无法对未识别的病虫害提供分析建议', 'warning')
-    return
-  }
-
-  isAnalyzing.value = true
-  showDetail.value = true
-  messages.value = [] // Clear previous chat
-  
-  try {
-    const response = await axios.post('/api/ai/analyze', {
-      pestName: detectionResult.value.pestName
-    })
-    messages.value.push({ role: 'assistant', content: response.data.analysis })
-  } catch (err) {
-    console.error('Failed to fetch AI analysis', err)
-    showToast('暂时无法获取 AI 分析结果，请稍后再试', 'error')
-  } finally {
-    isAnalyzing.value = false
-    scrollToBottom()
-  }
-}
-
-// 继续对话
 const sendMessage = async () => {
   if (!(userInput.value.trim() || pendingImage.value) || isSending.value) return
   
   const text = userInput.value.trim()
   userInput.value = ''
   
-  // 添加用户消息
+  // 娣诲姞鐢ㄦ埛娑堟伅
   messages.value.push({ role: 'user', content: text, imageBase64: pendingImage.value })
   scrollToBottom()
   
@@ -638,24 +806,25 @@ const sendMessage = async () => {
 
   try {
     const response = await axios.post('/api/ai/chat', {
-      pestName: detectionResult.value.pestName,
+      pestName: diagnosisContextName.value,
       messages: messages.value.map(m => ({ role: m.role, content: m.content, imageBase64: m.imageBase64 }))
     })
     messages.value.push({ role: 'assistant', content: response.data.reply })
   } catch (err) {
     console.error('Failed to send message', err)
-    showToast('发送消息失败，请重试', 'error')
+    showToast('发送消息失败，请稍后重试', 'error')
   } finally {
     isSending.value = false
     scrollToBottom()
   }
 }
 
-// 开启通用咨询对话
+// 寮€鍚€氱敤鍜ㄨ瀵硅瘽
 const startGeneralChat = () => {
   if (!(generalUserInput.value.trim() || pendingGeneralImage.value) || isSending.value) return
   
   detectionResult.value = {
+    ...createEmptyDetectionResult(),
     pestName: '通用农业咨询',
     confidence: 1,
     imageUrl: ''
@@ -672,7 +841,7 @@ const startGeneralChat = () => {
   sendMessage()
 }
 
-// 自动滚动到底部
+// 鑷姩婊氬姩鍒板簳閮?
 const scrollToBottom = () => {
   setTimeout(() => {
     if (chatContainer.value) {
@@ -681,7 +850,7 @@ const scrollToBottom = () => {
   }, 100)
 }
 
-// 简单的 Markdown 渲染（粗略处理 headers 和 lists）
+// 绠€鍗曠殑 Markdown 娓叉煋锛堢矖鐣ュ鐞?headers 鍜?lists锛?
 const renderMarkdown = (text) => {
   if (!text) return ''
   let html = text
@@ -693,16 +862,16 @@ const renderMarkdown = (text) => {
   return html
 }
 
-// 历史条目的 emoji 图标
-const getEmoji = (name) => {
-  if (name === 'unknown' || name === '未识别') return '❓'
-  return '🍃'
+// 鍘嗗彶鏉＄洰鐨?emoji 鍥炬爣
+const getEmoji = name => {
+  if (name === 'unknown' || name === '未识别' || name === '未能识别出具体病虫害') return '!'
+  return '叶'
 }
 
-// 格式化历史时间
+// 鏍煎紡鍖栧巻鍙叉椂闂?
 const formatTime = (item) => {
   const timestamp = item.time
-  if (!timestamp || isNaN(Number(timestamp))) return item.time || '刚刚'
+  if (!timestamp || isNaN(Number(timestamp))) return item.time || '鍒氬垰'
   
   const date = new Date(Number(timestamp))
   const now = new Date()
@@ -727,7 +896,7 @@ const formatTime = (item) => {
 <template>
   <div class="px-6 pt-4 min-h-full flex flex-col relative">
     
-    <!-- Toast 弹窗通知 -->
+    <!-- Toast -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0 -translate-y-4"
@@ -749,7 +918,8 @@ const formatTime = (item) => {
         </div>
       </div>
     </Transition>
-    <!-- SVG 滤镜定义 (用于发光) -->
+
+    <!-- SVG Filter -->
     <svg width="0" height="0" style="position:absolute">
       <filter id="orb-glow" x="-100%" y="-100%" width="300%" height="300%">
         <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur" />
@@ -763,7 +933,7 @@ const formatTime = (item) => {
       </filter>
     </svg>
 
-    <!-- 全屏录音毛玻璃遮罩层 -->
+    <!-- Recording Overlay -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -774,10 +944,7 @@ const formatTime = (item) => {
     >
       <div v-if="isRecording" class="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-md flex flex-col items-center justify-center selection:bg-transparent">
         <div class="relative flex items-center justify-center" style="width:260px;height:260px;">
-          <!-- Organic AI Orb: Canvas 实现 (忠实复刻 CodePen 数学公式) -->
           <canvas id="orb-canvas" width="260" height="260" class="absolute inset-0"></canvas>
-          
-          <!-- 悬浮的麦克风 Icon（绝对居中） -->
           <div class="absolute inset-0 flex items-center justify-center z-10">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="white" class="w-8 h-8 drop-shadow-lg">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
@@ -790,7 +957,7 @@ const formatTime = (item) => {
     </Transition>
 
     <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
+    <div class="flex justify-between items-center mb-6">
       <div>
         <h1 class="text-3xl font-bold text-slate-900 tracking-tight" v-motion-slide-visible-once-bottom>识别</h1>
         <p class="text-slate-500 text-sm mt-1 font-medium" v-motion-slide-visible-once-bottom :delay="100">AI 智能诊断助手</p>
@@ -800,38 +967,161 @@ const formatTime = (item) => {
         <span v-if="hasNewNotification" class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white shadow-sm animate-pulse"></span>
       </button>
     </div>
-    
-    <!-- Main Scan Area -->
-    <div class="flex-1 w-full min-h-[400px] bg-slate-900 rounded-[2rem] shadow-2xl shadow-slate-900/20 overflow-hidden relative border border-slate-800 mb-8 transform transition-transform active:scale-[0.99]" v-motion-pop-visible-once :delay="200">
-      <ScanOverlay ref="scanRef" @scan-complete="handleScanComplete" />
+
+    <!-- Combined Card Stack Area (Selection + Scan) -->
+    <div class="w-full flex-none mx-auto aspect-[0.95/1] max-w-[34rem] min-h-[22rem] bg-slate-900 rounded-[2rem] shadow-2xl shadow-slate-900/20 overflow-hidden relative border border-slate-800 mb-8 lg:flex-1 lg:max-w-none lg:min-h-[450px] lg:aspect-auto" v-motion-pop-visible-once :delay="200">
+      
+      <!-- LAYER 1: Main Scan Area (Bottom Pattern) -->
+      <div class="absolute inset-0 transition-all duration-700 ease-in-out" :class="selectionConfirmed ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-90 pointer-events-none'">
+        <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onScanFileSelected" />
+
+        <!-- Scanning Animation -->
+        <div v-if="isAnalyzing" class="absolute inset-0 z-40 flex flex-col items-center justify-center">
+          <img v-if="previewUrl" :src="previewUrl" class="absolute inset-0 w-full h-full object-cover opacity-20" />
+          <div class="relative z-10 flex flex-col items-center">
+            <div v-if="analysisStage === 'yolo'" class="flex flex-col items-center animate-fadeIn">
+              <div class="w-16 h-16 relative mb-3">
+                <div class="absolute inset-0 border-4 border-emerald-200 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
+              </div>
+              <span class="text-base font-black text-emerald-300">🔬 YOLO 模型检测中...</span>
+              <span class="text-xs text-white/60 mt-1">正在扫描图像中的病虫害特征</span>
+            </div>
+            <div v-else-if="analysisStage === 'review'" class="flex flex-col items-center animate-fadeIn">
+              <div class="w-16 h-16 relative mb-3">
+                <div class="absolute inset-0 border-4 border-amber-200 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin" style="animation-duration: 1.5s"></div>
+              </div>
+              <span class="text-base font-black text-amber-300">🧠 AI 视觉复核中...</span>
+              <span class="text-xs text-white/60 mt-1">大模型正在对图像进行深度分析</span>
+            </div>
+            <div v-else class="flex flex-col items-center animate-fadeIn">
+              <div class="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-3"><span class="text-3xl">✅</span></div>
+              <span class="text-base font-black text-emerald-300">分析完成</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Idle State -->
+        <div v-if="!isAnalyzing" class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center cursor-pointer z-40" @click="triggerScan">
+          
+          <button @click.stop="selectionConfirmed = false" class="absolute top-4 left-4 text-white/80 bg-black/30 px-3 py-1.5 rounded-full text-xs flex items-center gap-1 backdrop-blur-md transition-all z-50">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+            重选范围
+          </button>
+
+          <div class="relative flex flex-col items-center justify-center animate-tap mt-2">
+            <div class="absolute w-16 h-16 bg-green-500/40 rounded-full animate-ping -top-2"></div>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-14 h-14 text-white drop-shadow-lg z-10">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59" />
+            </svg>
+            <span class="mt-5 text-white/90 font-medium tracking-wide drop-shadow-md bg-black/20 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-sm">
+              点击拍照或上传图片
+            </span>
+          </div>
+        </div>
+
+        <!-- Aurora background -->
+        <div class="absolute inset-0 bg-aurora">
+          <div class="absolute top-[0%] left-[0%] w-[50%] h-[50%] bg-emerald-500/30 rounded-full mix-blend-screen filter blur-[60px] animate-blob"></div>
+          <div class="absolute bottom-[0%] right-[0%] w-[50%] h-[50%] bg-blue-500/40 rounded-full mix-blend-screen filter blur-[60px] animate-blob animation-delay-2000"></div>
+          <div class="absolute top-[10%] right-[30%] w-[60%] h-[60%] bg-cyan-500/35 rounded-full mix-blend-screen filter blur-[60px] animate-blob animation-delay-4000"></div>
+        </div>
+      </div>
+
+      <!-- LAYER 2: Category Selection Panel (Top Layer / Card) -->
+      <Transition
+        enter-active-class="transition-all duration-500 ease-out"
+        leave-active-class="transition-all duration-500 ease-in"
+        enter-from-class="opacity-0 translate-y-8 scale-95"
+        leave-to-class="opacity-0 -translate-y-8 scale-105"
+      >
+        <div v-if="!selectionConfirmed" class="absolute inset-0 bg-white z-50 flex flex-col p-5 rounded-[2rem]">
+          <div class="flex items-center gap-2 mb-4 shrink-0">
+            <h3 class="font-bold text-slate-800 text-lg tracking-wide">选择检测范围</h3>
+            <span v-if="!hasSelection" class="ml-auto text-xs font-bold text-amber-500 animate-pulse bg-amber-50 px-2.5 py-1 rounded-full">请至少选一项</span>
+            <span v-else class="ml-auto text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">已选 {{ selectedCategories.length }} 项</span>
+          </div>
+          
+          <div class="flex-1 content-start flex flex-col justify-center">
+            <p class="text-slate-400 text-xs font-bold mb-2 uppercase tracking-wider">作物与病害</p>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <button
+                v-for="opt in categoryOptions.filter(o => o.group === 'disease')"
+                :key="opt.key"
+                @click="toggleCategory(opt.value)"
+                class="relative px-3.5 py-1.5 rounded-[12px] border-2 text-sm font-bold transition-all duration-300 select-none flex items-center gap-1.5"
+                :class="selectedCategories.includes(opt.value)
+                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700 shadow-sm scale-[1.03]'
+                  : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-slate-100'"
+              >
+                <span class="text-base">{{ opt.icon }}</span>{{ opt.label }}
+                <!-- Checkmark badge -->
+                <div v-if="selectedCategories.includes(opt.value)" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-emerald-500 shadow-md border-2 border-white text-white rounded-full flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                </div>
+              </button>
+            </div>
+            
+            <p class="text-slate-400 text-xs font-bold mb-2 uppercase tracking-wider mt-1">虫害检测</p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="opt in categoryOptions.filter(o => o.group === 'pest')"
+                :key="opt.key"
+                @click="toggleCategory(opt.value)"
+                class="relative px-3.5 py-1.5 rounded-[12px] border-2 text-sm font-bold transition-all duration-300 select-none flex items-center gap-1.5"
+                :class="selectedCategories.includes(opt.value)
+                  ? 'border-orange-400 bg-orange-50 text-orange-700 shadow-sm scale-[1.03]'
+                  : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-slate-100'"
+              >
+                <span class="text-base">{{ opt.icon }}</span>{{ opt.label }}
+                <!-- Checkmark badge -->
+                <div v-if="selectedCategories.includes(opt.value)" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 shadow-md border-2 border-white text-white rounded-full flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                </div>
+              </button>
+            </div>
+          </div>
+          
+          <div class="mt-3 shrink-0">
+             <button 
+               @click="confirmSelection"
+               :disabled="!hasSelection"
+               class="w-full py-3.5 rounded-[14px] font-bold text-[15px] transition-all duration-300 flex items-center justify-center gap-2"
+               :class="hasSelection ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 active:scale-[0.98]' : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
+             >
+               <span>下一步：拍照/上传图片</span>
+               <svg v-if="hasSelection" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+               </svg>
+             </button>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- Recent History -->
-    <div class="mb-4" v-motion-slide-visible-once-bottom :delay="300">
+    <div class="mb-4" v-motion-slide-visible-once-bottom :delay="400">
       <div class="flex justify-between items-center mb-4 px-1">
         <h3 class="font-bold text-slate-800 text-lg">最近记录</h3>
         <button @click="router.push('/records')" class="text-green-600 text-sm font-semibold">全部</button>
       </div>
-      
       <div class="flex space-x-4 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-hide">
-        <!-- 空状态 -->
-        <div v-if="historyItems.length === 0" v-for="i in 3" :key="'placeholder-' + i" class="flex-shrink-0 w-24 h-28 bg-white rounded-2xl p-3 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center space-y-2 relative overflow-hidden">
+        <div v-if="historyItems.length === 0" v-for="i in 3" :key="'placeholder-' + i" class="flex-shrink-0 w-24 h-28 bg-white rounded-2xl p-3 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center space-y-2">
           <div class="w-10 h-10 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center text-lg">📷</div>
           <div class="text-center">
              <span class="block text-xs font-bold text-slate-300">待识别</span>
              <span class="block text-[10px] text-slate-300 font-medium mt-1">--</span>
           </div>
         </div>
-
-        <!-- 真实历史记录 -->
         <div
           v-for="item in historyItems"
           :key="item.id"
           class="flex-shrink-0 w-24 h-28 bg-white rounded-2xl p-3 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center space-y-2 transition-all duration-300 hover:shadow-md"
         >
           <div class="w-10 h-10 bg-green-50 text-green-500 rounded-full flex items-center justify-center text-lg overflow-hidden shrink-0">
-            <img v-if="item.imageUrl && item.imageUrl.trim() !== ''" :src="item.imageUrl" class="w-full h-full object-cover" @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline'" />
-            <span v-show="!item.imageUrl || item.imageUrl.trim() === ''">{{ getEmoji(item.name) }}</span>
+            <img v-if="item.imageUrl && item.imageUrl.trim() !== ''" :src="item.imageUrl" class="w-full h-full object-cover" @error="$event.target.style.display='none'" />
+            <span v-show="!item.imageUrl || item.imageUrl.trim() === ''">🌿</span>
           </div>
           <div class="text-center w-full">
              <span class="block text-xs font-bold text-slate-800 truncate w-full">{{ item.name }}</span>
@@ -841,35 +1131,27 @@ const formatTime = (item) => {
       </div>
     </div>
     
-    <!-- 首页直接提问框：有任何病害相关问题可以直接问 AI -->
-    <div class="mb-24 flex flex-col relative" v-motion-slide-visible-once-bottom :delay="400">
-      <!-- 待发送图片预览区 -->
+    <!-- General Chat Input -->
+    <div class="mb-24 flex flex-col relative" v-motion-slide-visible-once-bottom :delay="500">
       <div v-if="pendingGeneralImage" class="mb-2 relative w-16 h-16 ml-3">
         <img :src="pendingGeneralImage" class="w-full h-full object-cover rounded border border-slate-200 shadow-sm" />
         <button @click="removePendingGeneralImage" class="absolute -top-2 -right-2 bg-red-500/90 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs pb-[1px] hover:bg-red-600">×</button>
       </div>
-
       <div class="flex items-center space-x-3 w-full">
         <form @submit.prevent="startGeneralChat" class="relative flex items-center flex-1">
-          <!-- 隐藏的文件选择器 -->
           <input type="file" accept="image/*" class="hidden" ref="generalImageInputRef" @change="onGeneralImageSelected" />
-          
-          <!-- 左侧添加图片按钮 -->
           <button type="button" @click="triggerGeneralImageUpload" class="absolute left-2 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-green-500 transition-colors z-10" :disabled="isSending">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
             </svg>
           </button>
-
-          <!-- 文本输入框 -->
           <input 
             v-model="generalUserInput" 
             type="text" 
-            :placeholder="isRecording === 'general' ? '正在聆听您的声音...' : '输入病害名称提问'" 
+            :placeholder="isRecording === 'general' ? '正在聆听...' : '输入病害名称提问'" 
             class="w-full bg-white border border-slate-200 text-slate-800 rounded-full pl-12 pr-14 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all shadow-[0_4px_20px_rgb(0,0,0,0.04)]"
             :disabled="isSending"
           />
-          <!-- 发送按钮 -->
           <button 
             type="submit" 
             class="absolute py-1 px-3 right-1.5 top-1.5 bottom-1.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-300 text-white rounded-full flex items-center justify-center transition-colors shadow-sm"
@@ -880,8 +1162,6 @@ const formatTime = (item) => {
             </svg>
           </button>
         </form>
-
-        <!-- 按住说话语音按钮 -->
         <button 
           type="button" 
           @touchstart.prevent="handleVoiceStart('general')"
@@ -893,7 +1173,6 @@ const formatTime = (item) => {
           :class="isRecording === 'general' ? 'border-green-400 bg-green-500 text-white shadow-green-500/50 scale-110' : 'text-slate-600 hover:text-green-500 active:scale-95'"
           :disabled="isSending || isAudioProcessing"
         >
-          <!-- 取消小按钮自身的发光动画，因为大遮罩层已经有了 -->
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6 relative z-10 transition-transform">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
           </svg>
@@ -910,7 +1189,7 @@ const formatTime = (item) => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="isResultReady" class="absolute inset-0 z-50 flex items-end" @click="closeResult">
+      <div v-if="isResultReady" class="fixed inset-0 z-[100] flex items-end sm:items-center sm:justify-center" @click="closeResult">
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"></div>
         <Transition
           enter-active-class="transition duration-400 ease-out"
@@ -922,74 +1201,129 @@ const formatTime = (item) => {
         >
           <div v-if="isResultReady" class="relative z-10 bg-white w-full rounded-t-[2.5rem] px-8 pt-8 pb-24 h-[75%] sm:h-[80%] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col" @click.stop>
             <div class="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mb-8 shrink-0"></div>
+
+            <!-- Summary View (before "查看报告") -->
             <div v-if="!showDetail" class="flex-1 flex flex-col min-h-0">
               <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-2">
                 <div class="text-center mb-2">
-                  <!-- 结果图标 -->
-                  <div
-                    class="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl mb-4 border-4 border-white shadow-xl transition-all duration-500"
-                    :class="[confidenceColor.icon, `shadow-${confidenceColor.glow}`]"
-                  >
+                  <div class="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl mb-4 border-4 border-white shadow-xl" :class="[confidenceColor.icon]">
                     <img v-if="detectionResult.imageUrl" :src="detectionResult.imageUrl" class="w-full h-full object-cover rounded-full" />
-                    <span v-else>✓</span>
+                    <span v-else>🌿</span>
                   </div>
                   <h2 class="text-2xl font-bold text-slate-900 mb-1">识别完成</h2>
                   <p class="text-slate-500 font-medium mb-4">
-                    检测对象：<span class="text-slate-800 font-bold">{{ detectionResult.pestName }}</span>
+                    检测对象：<span class="text-slate-800 font-bold">{{ primaryDisplayName }}</span>
                   </p>
+                  <div class="flex flex-wrap items-center justify-center gap-2 mb-4">
+                    <span class="rounded-full px-3 py-1 text-xs font-bold" :class="sceneBadgeClasses">{{ sceneMeta.label }}</span>
+                    <span v-if="yoloUsed" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">🔬 YOLO</span>
+                    <span v-if="reviewRequired && detectionResult?.reviewResult" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">🧠 已复核</span>
+                    <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">⏳ 待复核</span>
+                    <span v-else-if="!reviewRequired && yoloUsed" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">无需复核</span>
+                  </div>
                 </div>
                 
-                <!-- 置信度进度条 -->
-                <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100/50">
+                <div v-if="detectionResult.confidence > 0" class="bg-slate-50 rounded-2xl p-4 border border-slate-100/50">
                   <div class="flex justify-between items-center mb-2">
                     <span class="text-slate-500 text-sm font-medium">AI 置信度</span>
                     <span class="font-bold text-base" :class="confidenceColor.text">{{ confidencePercent }}%</span>
                   </div>
                   <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      class="h-full rounded-full transition-all duration-1000 ease-out"
-                      :class="confidenceColor.bg"
-                      :style="{ width: confidencePercent + '%', boxShadow: '0 0 10px currentColor' }"
-                    ></div>
+                    <div class="h-full rounded-full transition-all duration-1000 ease-out" :class="confidenceColor.bg" :style="{ width: confidencePercent + '%' }"></div>
                   </div>
+                </div>
+
+                <div v-if="yoloUsed && summaryItems.length" class="mt-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                  <div class="text-sm font-bold text-slate-800">检测概览</div>
+                  <p class="mt-1 text-sm text-slate-500">{{ sceneMeta.description }}</p>
+                  <div v-if="detectedClassNames.length" class="mt-3 flex flex-wrap gap-2">
+                    <span v-for="className in detectedClassNames" :key="className" class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">{{ className }}</span>
+                  </div>
+                  <div class="mt-4 grid gap-3">
+                    <div v-for="item in summaryItems" :key="item.id" class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div>
+                          <div class="font-bold text-slate-800">{{ item.nameZh }}</div>
+                          <div class="mt-1 text-xs text-slate-500">检测 {{ item.count }} 处</div>
+                        </div>
+                        <div class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">{{ formatConfidence(item.maxConfidence, 1) }}</div>
+                      </div>
+                      <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div class="h-full rounded-full bg-gradient-to-r from-green-400 to-emerald-500" :style="{ width: `${Math.max(6, Math.min(item.maxConfidence * 100, 100))}%` }"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 复核结论卡片（阶段 2 结果） -->
+                <div v-if="detectionResult?.reviewResult" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-base">🧠</span>
+                    <span class="text-sm font-bold text-emerald-800">AI 视觉复核结论</span>
+                  </div>
+                  <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
+                </div>
+
+                <!-- 待复核提示（Dify 复核失败时） -->
+                <div v-else-if="reviewRequired" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-center gap-2">
+                  <span class="text-base">⏳</span>
+                  <span class="text-xs font-bold text-amber-700">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
                 </div>
               </div>
               
-              <div class="shrink-0">
-                <button @click="fetchAiAnalysis" class="w-full bg-slate-900 text-white py-3.5 sm:py-4 rounded-xl font-bold text-base shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all flex justify-center items-center space-x-2">
-                  <span>✨</span>
-                  <span>生成详细防范建议</span>
+              <div class="shrink-0 space-y-3">
+                <!-- 阶段 3：生成诊断报告按钮 -->
+                <button 
+                  v-if="!detectionResult?.report"
+                  @click="generateReport" 
+                  :disabled="isGeneratingReport"
+                  class="w-full py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                  :class="reviewRequired 
+                    ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 animate-pulse-subtle' 
+                    : 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'"
+                >
+                  <template v-if="isGeneratingReport">
+                    <svg class="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <span>AI 诊断报告生成中...</span>
+                  </template>
+                  <template v-else>
+                    <span>📋</span>
+                    <span>生成 AI 诊断建议</span>
+                    <span v-if="reviewRequired" class="text-xs opacity-80 ml-1">(推荐)</span>
+                  </template>
+                </button>
+
+                <!-- 已有报告时：查看报告按钮 -->
+                <button 
+                  v-if="detectionResult?.report" 
+                  @click="showDetail = true" 
+                  class="w-full bg-slate-900 text-white py-3.5 sm:py-4 rounded-xl font-bold text-base shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all"
+                >
+                  查看详细诊断报告
                 </button>
               </div>
             </div>
 
-            <!-- 详细分析视图 -->
+            <!-- Detail View (Chat with Report) -->
             <div v-else class="flex-1 flex flex-col min-h-0">
               <div class="flex items-center justify-between mb-4 pb-4 border-b">
                 <button v-if="detectionResult.pestName !== '通用农业咨询'" @click="showDetail = false" class="text-slate-400 font-bold px-2 py-1 bg-slate-100 rounded-lg text-sm">返回</button>
                 <button v-else @click="closeResult" class="text-slate-400 font-bold px-2 py-1 bg-slate-100 rounded-lg text-sm">关闭</button>
-                <h2 class="text-xl font-bold text-slate-900 truncate flex-1 text-center px-4">
-                  {{ detectionResult.pestName === '通用农业咨询' ? 'AI 诊断咨询' : detectionResult.pestName + ' 分析报告' }}
-                </h2>
-                <!-- 右上角朗读按钮 -->
+                <h2 class="text-xl font-bold text-slate-900 truncate flex-1 text-center px-4">{{ detailTitle }}</h2>
                 <button 
                   @click="speakLastReply" 
                   class="w-10 h-10 rounded-full flex items-center justify-center transition-all"
                   :class="isSpeaking ? 'bg-green-100 text-green-600' : isTtsLoading ? 'bg-slate-100 text-slate-400' : 'text-slate-400 hover:text-green-500 hover:bg-green-50'"
                   :disabled="isTtsLoading && !isSpeaking"
-                  title="朗读 AI 回复"
                 >
-                  <!-- 加载中 -->
                   <svg v-if="isTtsLoading && !isSpeaking" class="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <!-- 播放中 -->
                   <svg v-else-if="isSpeaking" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 animate-pulse">
                     <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 01-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z" />
                     <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
                   </svg>
-                  <!-- 默认状态 -->
                   <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
                   </svg>
@@ -997,32 +1331,25 @@ const formatTime = (item) => {
               </div>
               
               <div ref="chatContainer" class="flex-1 overflow-y-auto pb-4 custom-scrollbar px-2 space-y-6">
-                <!-- 初始的思考动画 -->
                 <div v-if="isAnalyzing && messages.length === 0" class="flex flex-col items-center justify-center py-20">
                    <div class="w-16 h-16 relative mb-6">
                      <div class="absolute inset-0 border-4 border-green-100 rounded-full"></div>
                      <div class="absolute inset-0 border-4 border-green-500 rounded-full border-t-transparent animate-spin"></div>
-                     <div class="absolute inset-0 flex items-center justify-center text-xl">✨</div>
+                     <div class="absolute inset-0 flex items-center justify-center text-xl">AI</div>
                    </div>
-                   <h3 class="text-lg font-bold text-slate-800 mb-2 animate-pulse">豆包 AI 思考中</h3>
-                   <p class="text-sm text-slate-500">正在查阅农业知识库生成防治方案...</p>
+                   <h3 class="text-lg font-bold text-slate-800 mb-2 animate-pulse">AI 正在思考中</h3>
+                   <p class="text-sm text-slate-500">正在整理识别结果并生成诊断建议...</p>
                 </div>
                 
-                <!-- 聊天历史列表 -->
                 <div v-for="(msg, index) in messages" :key="index" class="flex w-full" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
-                  <!-- AI 气泡 -->
                   <div v-if="msg.role === 'assistant'" class="flex items-start space-x-3 max-w-[95%]">
-                    <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">
-                      AI
-                    </div>
+                    <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
                     <div class="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm">
                       <div class="markdown-body text-slate-700 text-sm leading-relaxed" v-html="renderMarkdown(msg.content)"></div>
                     </div>
                   </div>
-                  
-                  <!-- 用户气泡 -->
                   <div v-else class="flex items-end space-x-2 max-w-[85%]">
-                    <div class="bg-green-500 text-white rounded-2xl rounded-br-sm shadow-md overflow-hidden relative group" :class="[msg.imageBase64 ? 'p-1' : 'px-5 py-3']">
+                    <div class="bg-green-500 text-white rounded-2xl rounded-br-sm shadow-md overflow-hidden relative" :class="[msg.imageBase64 ? 'p-1' : 'px-5 py-3']">
                       <img v-if="msg.imageBase64" :src="msg.imageBase64" class="w-full max-w-[200px] object-cover rounded-[10px]" :class="msg.content ? 'mb-2' : ''" />
                       <div v-if="msg.content" :class="msg.imageBase64 ? 'px-3 pb-2 pt-1' : ''">
                         <p class="text-sm leading-relaxed whitespace-pre-wrap">{{ msg.content }}</p>
@@ -1031,11 +1358,8 @@ const formatTime = (item) => {
                   </div>
                 </div>
 
-                <!-- 发送消息时的等待动画 -->
                 <div v-if="isSending" class="flex items-start space-x-3 max-w-[95%]">
-                   <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">
-                     AI
-                   </div>
+                   <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
                    <div class="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm flex items-center space-x-1">
                      <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
                      <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
@@ -1044,27 +1368,20 @@ const formatTime = (item) => {
                 </div>
               </div>
 
-              <!-- 底部吸底输入框 (带有图文混合功能) -->
+              <!-- Chat input -->
               <div class="shrink-0 pt-3 mt-1 bg-white border-t border-slate-100 flex flex-col relative w-full">
-                <!-- 待发送图片预览区 -->
                 <div v-if="pendingImage" class="mb-2 relative w-16 h-16 ml-3">
                   <img :src="pendingImage" class="w-full h-full object-cover rounded border border-slate-200 shadow-sm" />
                   <button @click="removePendingImage" class="absolute -top-2 -right-2 bg-red-500/90 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs pb-[1px] hover:bg-red-600">×</button>
                 </div>
-
                 <div class="flex items-center space-x-2 w-full">
                   <form @submit.prevent="sendMessage" class="relative flex items-center flex-1">
-                    <!-- 隐藏的文件选择器 -->
                     <input type="file" accept="image/*" class="hidden" ref="imageInputRef" @change="onImageSelected" />
-                    
-                    <!-- 左侧添加图片按钮 -->
                     <button type="button" @click="triggerImageUpload" class="absolute left-2 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-green-500 transition-colors z-10" :disabled="isSending || isAnalyzing">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                       </svg>
                     </button>
-
-                    <!-- 文本输入框 -->
                     <input 
                       v-model="userInput" 
                       type="text" 
@@ -1072,7 +1389,6 @@ const formatTime = (item) => {
                       class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-full pl-12 pr-14 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
                       :disabled="isSending || isAnalyzing"
                     />
-                    <!-- 发送按钮 -->
                     <button 
                       type="submit" 
                       class="absolute py-1 px-3 right-1.5 top-1.5 bottom-1.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-300 text-white rounded-full flex items-center justify-center transition-colors shadow-sm"
@@ -1083,8 +1399,6 @@ const formatTime = (item) => {
                       </svg>
                     </button>
                   </form>
-
-                  <!-- 外部独立的语音按钮（长按说话） -->
                   <button 
                     type="button" 
                     @touchstart.prevent="handleVoiceStart('chat')"
@@ -1114,8 +1428,8 @@ const formatTime = (item) => {
       <div class="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden relative z-10 shadow-2xl popup-enter">
         <div class="bg-gradient-to-br from-green-500 to-emerald-600 px-6 py-6 text-white">
           <div class="flex items-center justify-between mb-3">
-            <span class="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">📢 系统公告</span>
-            <button @click="dismissPopup" class="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white font-bold active:scale-90 transition-transform">✕</button>
+            <span class="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold">🔔 系统公告</span>
+            <button @click="dismissPopup" class="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white font-bold active:scale-90 transition-transform">×</button>
           </div>
           <h2 class="text-xl font-bold leading-tight">{{ popupAnnouncement.title }}</h2>
         </div>
@@ -1133,17 +1447,22 @@ const formatTime = (item) => {
 <style scoped>
 @keyframes popup-in { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .popup-enter { animation: popup-in 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-</style>
 
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+
+@keyframes tap { 0% { transform: scale(1) translateY(0); } 10% { transform: scale(0.9) translateY(4px); } 20% { transform: scale(1) translateY(0); } 100% { transform: scale(1) translateY(0); } }
+.animate-tap { animation: tap 2s ease-in-out infinite; }
+
+.bg-aurora { background: linear-gradient(-45deg, #020617, #064e3b, #0f172a); background-size: 400% 400%; animation: gradientBG 15s ease infinite; }
+@keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+@keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
+.animate-blob { animation: blob 8s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>

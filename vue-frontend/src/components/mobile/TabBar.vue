@@ -37,12 +37,12 @@ const activeIndex = computed(() => {
         <!-- The Shape Layer (Filtered) -->
         <div class="absolute inset-0 w-full h-full filter-goo z-10 pointer-events-none">
             <!-- Base Bar -->
-            <div class="absolute bottom-0 left-0 w-full h-[60px] bg-white shadow-lg"></div>
+            <div class="absolute bottom-0 left-0 w-full h-[60px] bg-white shadow-lg dark:bg-slate-900 dark:shadow-[0_18px_40px_rgba(2,6,23,0.48)]"></div>
             
             <!-- The Moving Hump (White Circle) -->
             <!-- Reduced size and position to create a subtler rise -->
             <div 
-              class="absolute bottom-[20px] w-[80px] h-[80px] bg-white rounded-full transition-all duration-500 cubic-bezier-spring"
+              class="absolute bottom-[20px] w-[80px] h-[80px] bg-white dark:bg-slate-900 rounded-full transition-all duration-500 cubic-bezier-spring"
               :style="{ 
                  left: `calc((100% / 4 * ${activeIndex}) + 12.5% - 40px)`
               }"
@@ -55,7 +55,7 @@ const activeIndex = computed(() => {
             <!-- Active Green Circle -->
             <!-- Sunk deeper: bottom-25px means about 2/3rds is inside the 60px base bar + hump -->
             <div 
-               class="absolute bottom-[28px] w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-green-500/30 transition-all duration-500 cubic-bezier-spring pointer-events-none"
+               class="absolute bottom-[28px] w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-green-500/30 dark:shadow-green-500/20 transition-all duration-500 cubic-bezier-spring pointer-events-none"
                :style="{ 
                   left: `calc((100% / 4 * ${activeIndex}) + 12.5% - 28px)`
                }"
@@ -74,7 +74,7 @@ const activeIndex = computed(() => {
                    <!-- Adjusted jump height to match new circle position -->
                    <div 
                      class="absolute z-30 transition-all duration-500 cubic-bezier-spring"
-                     :class="activeIndex === index ? 'bottom-[44px] text-white' : 'bottom-[32px] text-slate-400'"
+                     :class="activeIndex === index ? 'bottom-[44px] text-white' : 'bottom-[32px] text-slate-400 dark:text-slate-500'"
                    >
                       <!-- CAMERA -->
                       <svg v-if="tab.type === 'camera'" viewBox="0 0 24 24" class="w-6 h-6">
@@ -108,7 +108,7 @@ const activeIndex = computed(() => {
                    <!-- Label -->
                    <span 
                       class="text-[10px] font-bold tracking-wide transition-all duration-300 transform block"
-                      :class="activeIndex === index ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0 text-slate-500'"
+                      :class="activeIndex === index ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0 text-slate-500 dark:text-slate-400'"
                    >
                       {{ tab.label }}
                    </span>
