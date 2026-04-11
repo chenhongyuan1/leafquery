@@ -1,14 +1,17 @@
-﻿<script setup>
+<script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useFarmStore } from '../../stores/farmCloud'
-import { useFavoritesStore } from '../../stores/favorites'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
 import PCFarmManager from '../../components/pc/PCFarmManager.vue'
 import {
+  AUTH_CHANGE_EVENT,
   changePassword,
   clearUserSession,
   deleteAccount,
-  getAccountErrorMessage
+  getStoredUser,
+  getAccountErrorMessage,
+  persistUser
 } from '../../utils/accountSecurity'
 
 const farmStore = useFarmStore()
@@ -34,19 +37,58 @@ const deleteForm = ref({
   currentPassword: ''
 })
 
+// 修改用户名状态
+const isEditingUsername = ref(false)
+const editUsername = ref('')
+const editUsernameLoading = ref(false)
+const editUsernameError = ref('')
+
+const startEditUsername = () => {
+  editUsername.value = currentUser.value?.username || ''
+  editUsernameError.value = ''
+  isEditingUsername.value = true
+}
+
+const cancelEditUsername = () => {
+  isEditingUsername.value = false
+  editUsernameError.value = ''
+}
+
+const submitEditUsername = async () => {
+  const newName = editUsername.value.trim()
+  if (!newName) {
+    editUsernameError.value = '用户名不能为空'
+    return
+  }
+  if (newName === currentUser.value?.username) {
+    isEditingUsername.value = false
+    return
+  }
+  editUsernameLoading.value = true
+  editUsernameError.value = ''
+  try {
+    const res = await axios.put('/api/user/update-username', {
+      userId: currentUser.value.userId,
+      username: newName
+    })
+    if (res.data.code === 200) {
+      currentUser.value = res.data.data
+      persistUser(res.data.data)
+      isEditingUsername.value = false
+      setAccountFeedback('用户名修改成功')
+    } else {
+      editUsernameError.value = res.data.message || '修改失败'
+    }
+  } catch (err) {
+    editUsernameError.value = err.response?.data?.message || '网络错误，请稍后重试'
+  } finally {
+    editUsernameLoading.value = false
+  }
+}
+
 let themeObserver = null
 
 const DISEASE_SAFE_KEYWORDS = ['健康', 'healthy', 'unknown', '未发现', '暂无异常']
-
-const getStoredUser = () => {
-  try {
-    const raw = localStorage.getItem('user')
-    return raw ? JSON.parse(raw) : null
-  } catch (error) {
-    console.error('Failed to parse current user from localStorage', error)
-    return null
-  }
-}
 
 const setAccountFeedback = (message, type = 'success') => {
   accountFeedbackMessage.value = message
@@ -133,28 +175,7 @@ const activeCropSummary = computed(() => {
   const place = [crop.province, crop.city].filter(Boolean).join(' / ') || crop.region || '未设定地区'
   return `${crop.name} · ${place}`
 })
-const syncCards = computed(() => ([
-  {
-    label: '农场作物',
-    value: farmStore.syncMode === 'cloud' ? '云端主存' : farmStore.syncMode === 'cloud-fallback' ? '云端兜底' : '本地模式',
-    desc: '由 farmCloud 统一托管，PC 与移动端共用同一套数据源。'
-  },
-  {
-    label: '识别记录',
-    value: currentUser.value?.userId ? '数据库回流' : '本地历史',
-    desc: currentUser.value?.userId ? '进入页面后调用 /api/record/list 并同步到农场状态。' : '未登录时展示本地识别历史。'
-  },
-  {
-    label: '知识收藏',
-    value: currentUser.value?.userId ? '云端接口' : '需登录',
-    desc: '收藏列表由 /api/favorite/list 提供，当前页仅负责展示与取消收藏。'
-  },
-  {
-    label: '主题偏好',
-    value: currentThemeLabel.value,
-    desc: '主题仍由桌面端前端偏好控制，不写入业务数据库。'
-  }
-]))
+
 
 const getFavoriteTypeLabel = (type) => {
   switch (type) {
@@ -240,13 +261,7 @@ const loadPageData = async () => {
 }
 
 const toggleFavorite = async (item) => {
-  await favoritesStore.toggleFavorite({
-    type: item.itemType,
-    id: item.itemId,
-    title: item.title,
-    image: item.imageUrl,
-    desc: item.description
-  })
+  await favoritesStore.removeFavorite(item)
 }
 
 const submitPasswordChange = async () => {
@@ -332,12 +347,14 @@ onMounted(async () => {
     attributes: true,
     attributeFilter: ['class']
   })
+  window.addEventListener(AUTH_CHANGE_EVENT, loadPageData)
 
   await loadPageData()
 })
 
 onBeforeUnmount(() => {
   themeObserver?.disconnect()
+  window.removeEventListener(AUTH_CHANGE_EVENT, loadPageData)
 })
 </script>
 
@@ -394,15 +411,6 @@ onBeforeUnmount(() => {
         >
           识别记录
         </button>
-        <button
-          class="rounded-2xl px-5 py-3 text-left text-sm font-bold transition-colors"
-          :class="activeSection === 'sync'
-            ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/10 dark:bg-emerald-400 dark:text-slate-950'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70'"
-          @click="activeSection = 'sync'"
-        >
-          同步状态
-        </button>
 
         <div class="pc-settings-soft mt-auto rounded-[1.75rem] border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/60">
           <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">当前作物</div>
@@ -431,7 +439,37 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <div class="text-xs font-bold uppercase tracking-[0.24em] text-white/60">LeafQuery Account</div>
-                  <h3 class="mt-3 text-3xl font-black">{{ currentUser?.username || '未登录用户' }}</h3>
+                  <div v-if="currentUser" class="mt-3">
+                    <div v-if="!isEditingUsername" class="flex items-center gap-3">
+                      <h3 class="text-3xl font-black">{{ currentUser.username }}</h3>
+                      <button @click="startEditUsername" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white transition-all shadow-sm ring-1 ring-white/10" title="修改用户名">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                    </div>
+                    <div v-else class="flex flex-col gap-2">
+                      <div class="flex items-center gap-2">
+                        <input
+                          v-model="editUsername"
+                          @keyup.enter="submitEditUsername"
+                          @keyup.escape="cancelEditUsername"
+                          type="text"
+                          maxlength="20"
+                          autofocus
+                          class="w-48 bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder-white/40 rounded-xl px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:bg-white/20 transition-all text-base"
+                          placeholder="输入新用户名"
+                        />
+                        <button @click="submitEditUsername" :disabled="editUsernameLoading" class="w-10 h-10 rounded-xl bg-emerald-500/80 hover:bg-emerald-500 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white font-bold transition-all disabled:opacity-50 ring-1 ring-emerald-400/50">
+                          <span v-if="editUsernameLoading" class="animate-spin text-sm">⏳</span>
+                          <span v-else class="text-base">✓</span>
+                        </button>
+                        <button @click="cancelEditUsername" class="w-10 h-10 rounded-xl bg-white/10 hover:bg-rose-500/60 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white font-bold transition-all ring-1 ring-white/10">
+                          <span class="text-base" v-text="'✕'"></span>
+                        </button>
+                      </div>
+                      <p v-if="editUsernameError" class="text-rose-300 text-xs font-bold animate-pulse">{{ editUsernameError }}</p>
+                    </div>
+                  </div>
+                  <h3 v-else class="mt-3 text-3xl font-black">未登录用户</h3>
                   <p class="mt-2 max-w-2xl text-sm text-white/70">
                     当前账户负责同步 PC 端农场档案、识别记录和收藏数据。退出登录后会自动回退到本地模式。
                   </p>
@@ -447,11 +485,7 @@ onBeforeUnmount(() => {
                   <div class="text-white/[0.55]">主题</div>
                   <div class="mt-2 font-black">{{ currentThemeLabel }}</div>
                 </div>
-                <div class="rounded-2xl bg-white/[0.08] px-4 py-3 ring-1 ring-white/10">
-                  <div class="text-white/[0.55]">同步模式</div>
-                  <div class="mt-2 font-black">{{ farmStore.syncMode }}</div>
-                </div>
-                <div class="rounded-2xl bg-white/[0.08] px-4 py-3 ring-1 ring-white/10">
+                <div class="col-span-2 rounded-2xl bg-white/[0.08] px-4 py-3 ring-1 ring-white/10">
                   <div class="text-white/[0.55]">当前作物</div>
                   <div class="mt-2 font-black">{{ farmStore.activeCrop?.name || '未设置' }}</div>
                 </div>
@@ -482,7 +516,7 @@ onBeforeUnmount(() => {
             </article>
           </div>
 
-          <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <div class="grid grid-cols-1 gap-6">
             <section class="pc-settings-panel rounded-[1.75rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/[0.55]">
               <h4 class="text-lg font-black text-slate-900 dark:text-slate-100">账户信息</h4>
               <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -502,25 +536,6 @@ onBeforeUnmount(() => {
                   <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">当前物候期</div>
                   <div class="mt-2 text-sm font-bold text-slate-800 dark:text-slate-100">{{ farmStore.activeCrop?.stage || '未设置' }}</div>
                 </div>
-              </div>
-            </section>
-
-            <section class="pc-settings-panel rounded-[1.75rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/[0.55]">
-              <h4 class="text-lg font-black text-slate-900 dark:text-slate-100">同步总览</h4>
-              <div class="mt-5 space-y-3">
-                <article
-                  v-for="card in syncCards"
-                  :key="card.label"
-                  class="pc-settings-soft rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900"
-                >
-                  <div class="flex items-center justify-between gap-4">
-                    <div class="text-sm font-bold text-slate-800 dark:text-slate-100">{{ card.label }}</div>
-                    <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      {{ card.value }}
-                    </span>
-                  </div>
-                  <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ card.desc }}</div>
-                </article>
               </div>
             </section>
           </div>
@@ -678,7 +693,8 @@ onBeforeUnmount(() => {
               </div>
 
               <button
-                class="absolute right-4 top-4 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-500 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20"
+                class="absolute right-4 top-4 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-500 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-rose-500/10 dark:hover:bg-rose-500/20"
+                :disabled="favoritesStore.isFavoriteSubmitting"
                 @click="toggleFavorite(item)"
               >
                 取消收藏
@@ -745,43 +761,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-else class="space-y-6">
-          <div>
-            <h3 class="text-2xl font-black text-slate-900 dark:text-slate-100">同步状态</h3>
-            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              说明桌面端各模块当前的数据托管方式，以及出现异常时的兜底逻辑。
-            </p>
-          </div>
 
-          <div class="grid grid-cols-1 gap-5 xl:grid-cols-4">
-            <article
-              v-for="card in syncCards"
-              :key="card.label"
-              class="pc-settings-panel rounded-[1.75rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/[0.55]"
-            >
-              <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{{ card.label }}</div>
-              <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100">{{ card.value }}</div>
-              <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{ card.desc }}</div>
-            </article>
-          </div>
-
-          <div
-            class="rounded-[1.75rem] border p-6"
-            :class="farmStore.syncError
-              ? 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10'
-              : 'border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/[0.55]'"
-          >
-            <div class="text-lg font-black text-slate-900 dark:text-slate-100">当前说明</div>
-            <div class="mt-4 space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              <p>农场作物已使用 `farmCloud` 统一管理，未登录时自动降级为本地模式。</p>
-              <p>识别记录会在页面挂载时拉取后端列表，并同步进农场云端状态供数据中心复用。</p>
-              <p>收藏内容仍通过独立收藏 store 读取，主题偏好只留在本地浏览器。</p>
-              <p v-if="farmStore.syncError" class="font-bold text-amber-700 dark:text-amber-200">
-                最近一次同步提示：{{ farmStore.syncError }}
-              </p>
-            </div>
-          </div>
-        </div>
       </section>
     </div>
   </div>

@@ -11,5 +11,11 @@ public interface RecordMapper {
 
     List<Record> selectRecordsByUserId(@Param("userId") Long userId);
 
+    Record selectById(@Param("id") Long id);
+
+    int deleteById(@Param("id") Long id);
+
+    int deleteAllByUserId(@Param("userId") Long userId);
+
     int countAll();
 }

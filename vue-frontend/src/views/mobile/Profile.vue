@@ -3,9 +3,17 @@ import { ref, reactive, onMounted, computed, watch, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmCloud'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
+import {
+  AUTH_CHANGE_EVENT,
+  clearUserSession,
+  getStoredUser,
+  persistUser
+} from '../../utils/accountSecurity'
 
 const router = useRouter()
 const farmStore = useFarmStore()
+const favoritesStore = useFavoritesStore()
 
 const menuItems = [
   { label: '我的农场', icon: '🏡', route: '/farm' },
@@ -24,9 +32,55 @@ const handleMenuClick = (item) => {
   }
 }
 
-
 // 用户状态
 const currentUser = ref(null)
+
+// 修改用户名状态
+const isEditingUsername = ref(false)
+const editUsername = ref('')
+const editUsernameLoading = ref(false)
+const editUsernameError = ref('')
+
+const startEditUsername = () => {
+  editUsername.value = currentUser.value?.username || ''
+  editUsernameError.value = ''
+  isEditingUsername.value = true
+}
+
+const cancelEditUsername = () => {
+  isEditingUsername.value = false
+  editUsernameError.value = ''
+}
+
+const submitEditUsername = async () => {
+  const newName = editUsername.value.trim()
+  if (!newName) {
+    editUsernameError.value = '用户名不能为空'
+    return
+  }
+  if (newName === currentUser.value?.username) {
+    isEditingUsername.value = false
+    return
+  }
+  editUsernameLoading.value = true
+  editUsernameError.value = ''
+  try {
+    const res = await axios.put('/api/user/update-username', {
+      userId: currentUser.value.userId,
+      username: newName
+    })
+    if (res.data.code === 200) {
+      currentUser.value = persistUser(res.data.data)
+      isEditingUsername.value = false
+    } else {
+      editUsernameError.value = res.data.message || '修改失败'
+    }
+  } catch (err) {
+    editUsernameError.value = err.response?.data?.message || '网络错误，请稍后重试'
+  } finally {
+    editUsernameLoading.value = false
+  }
+}
 
 // 认证遮罩层状态
 const showAuthOverlay = ref(false)
@@ -47,6 +101,7 @@ onUnmounted(() => {
   if (container) {
     container.style.overflowY = 'auto'
   }
+  window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 
 const form = reactive({
@@ -64,6 +119,16 @@ const coveredAreaCount = computed(() => {
   return new Set(farmStore.crops.map(c => c.region)).size
 })
 
+const syncCurrentUser = () => {
+  currentUser.value = getStoredUser()
+  return currentUser.value
+}
+
+const resetStats = () => {
+  recordCount.value = 0
+  diseaseCount.value = 0
+}
+
 const fetchStats = async () => {
   if (currentUser.value && currentUser.value.userId) {
     try {
@@ -79,16 +144,20 @@ const fetchStats = async () => {
     } catch (e) {
       console.error('获取统计数据失败', e)
     }
+  } else {
+    resetStats()
   }
 }
 
+const handleAuthChange = () => {
+  syncCurrentUser()
+  fetchStats()
+}
+
 onMounted(async () => {
-  // 从本地存储读取用户信息
-  const savedUser = localStorage.getItem('user')
-  if (savedUser) {
-    currentUser.value = JSON.parse(savedUser)
-    fetchStats()
-  }
+  window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
+  syncCurrentUser()
+  fetchStats()
   await farmStore.initialize()
 })
 
@@ -153,10 +222,12 @@ const handleSubmit = async () => {
         password: form.password
       })
       if (res.data.code === 200) {
-        currentUser.value = res.data.data
-        localStorage.setItem('user', JSON.stringify(res.data.data))
-        await farmStore.initialize({ force: true })
-        fetchStats()
+        currentUser.value = persistUser(res.data.data)
+        await Promise.all([
+          farmStore.initialize({ force: true }),
+          favoritesStore.loadFavorites(currentUser.value?.userId)
+        ])
+        await fetchStats()
         closeAuth()
       }
     } else {
@@ -184,12 +255,13 @@ const handleSubmit = async () => {
   }
 }
 
-const handleLogout = () => {
+const handleLogout = async () => {
+  await clearUserSession({
+    farmStore,
+    favoritesStore
+  })
   currentUser.value = null
-  localStorage.removeItem('user')
-  farmStore.resetToLocal()
-  recordCount.value = 0
-  diseaseCount.value = 0
+  resetStats()
 }
 </script>
 
@@ -208,169 +280,197 @@ const handleLogout = () => {
           <div class="absolute -bottom-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-110" :class="showAuthOverlay ? 'scale-150' : ''"></div>
           <div class="absolute top-10 left-10 w-40 h-40 bg-yellow-300/20 rounded-full blur-2xl transition-transform duration-700 group-hover:scale-110" :class="showAuthOverlay ? 'scale-[2]' : ''"></div>
       
-      <!-- DEFAULT PROFILE HEADER CONTENT (Only visible when NOT in Auth Mode) -->
-      <transition
-        enter-active-class="transition duration-500 ease-out delay-200"
-        enter-from-class="opacity-0 -translate-y-8"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition duration-300 ease-in"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 -translate-y-8 absolute inset-x-0"
-      >
-        <div v-show="!showAuthOverlay" class="profile-hero-content relative z-10 pt-16 px-8 text-center flex flex-col items-center justify-center">
-           
-           <div class="w-24 h-24 bg-white p-1 rounded-full shadow-lg mb-6 cursor-pointer transform hover:scale-105 transition-transform" @click="!currentUser && openAuth()">
-             <div class="w-full h-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden relative border-2 border-white dark:border-slate-800">
-                <template v-if="displayAvatar">
-                  <img :src="displayAvatar" class="w-full h-full object-cover" />
-                </template>
-                <template v-else>
-                  <div class="absolute inset-0 bg-gradient-to-tr from-green-400 to-blue-500"></div>
-                  <div class="absolute inset-0 flex items-center justify-center text-4xl">👨‍🌾</div>
-                </template>
-             </div>
-           </div>
-           
-           <template v-if="currentUser">
-             <h2 class="text-2xl font-bold text-white mb-1">{{ currentUser.username }}</h2>
-             <div class="inline-flex items-center px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/20">
-               <span class="w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>
-               <span class="text-xs font-medium text-white">{{ userRoleName }} ID: {{ currentUser.id || currentUser.userId }}</span>
-             </div>
-           </template>
-           
-           <template v-else>
-             <button @click="openAuth" class="inline-flex items-center px-6 py-2.5 bg-white/20 border border-white/30 backdrop-blur-md text-white font-bold rounded-full shadow-lg hover:bg-white/30 hover:scale-105 active:scale-95 transition-all group">
-               <span class="text-xl mr-3 font-extrabold tracking-wide">未登录</span>
-               <span class="w-[1px] h-4 bg-white/50 mr-3"></span>
-               <span class="text-sm font-medium">点击登录 / 注册</span>
-               <span class="ml-2 group-hover:translate-x-1 transition-transform">👉</span>
-             </button>
-           </template>
-        </div>
-      </transition>
+          <!-- DEFAULT PROFILE HEADER CONTENT (Only visible when NOT in Auth Mode) -->
+          <transition
+            enter-active-class="transition duration-500 ease-out delay-200"
+            enter-from-class="opacity-0 -translate-y-8"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-300 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-8 absolute inset-x-0"
+          >
+            <div v-show="!showAuthOverlay" class="profile-hero-content relative z-10 pt-16 px-8 text-center flex flex-col items-center justify-center">
+               
+               <div class="w-24 h-24 bg-white p-1 rounded-full shadow-lg mb-6 cursor-pointer transform hover:scale-105 transition-transform" @click="!currentUser && openAuth()">
+                 <div class="w-full h-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden relative border-2 border-white dark:border-slate-800">
+                    <template v-if="displayAvatar">
+                      <img :src="displayAvatar" class="w-full h-full object-cover" />
+                    </template>
+                    <template v-else>
+                      <div class="absolute inset-0 bg-gradient-to-tr from-green-400 to-blue-500"></div>
+                      <div class="absolute inset-0 flex items-center justify-center text-4xl">👨‍🌾</div>
+                    </template>
+                 </div>
+               </div>
+               
+               <template v-if="currentUser">
+                 <div v-if="!isEditingUsername" class="flex items-center justify-center space-x-2 mb-1">
+                   <h2 class="text-2xl font-bold text-white">{{ currentUser.username }}</h2>
+                   <button @click="startEditUsername" class="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-all" title="修改用户名">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                   </button>
+                 </div>
+                 <div v-else class="flex flex-col items-center space-y-2 mb-1 w-full max-w-xs mx-auto">
+                   <div class="flex items-center w-full space-x-2">
+                     <input
+                       v-model="editUsername"
+                       @keyup.enter="submitEditUsername"
+                       @keyup.escape="cancelEditUsername"
+                       type="text"
+                       maxlength="20"
+                       autofocus
+                       class="flex-1 w-32 bg-white/20 backdrop-blur-md border border-white/30 text-white placeholder-white/50 rounded-xl px-2 py-1.5 text-center font-bold focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-white/25 transition-all text-sm"
+                       placeholder="输入新用户名"
+                     />
+                     <button @click="submitEditUsername" :disabled="editUsernameLoading" class="w-8 h-8 rounded-xl bg-white/25 hover:bg-green-500/70 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white font-bold transition-all disabled:opacity-50">
+                       <span v-if="editUsernameLoading" class="animate-spin text-sm">⏳</span>
+                       <span v-else class="text-sm">✓</span>
+                     </button>
+                     <button @click="cancelEditUsername" class="w-8 h-8 rounded-xl bg-white/15 hover:bg-red-500/50 active:scale-90 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white font-bold transition-all">
+                       <span class="text-sm" v-text="'✕'"></span>
+                     </button>
+                   </div>
+                   <p v-if="editUsernameError" class="text-red-300 text-xs font-bold animate-pulse mt-2">{{ editUsernameError }}</p>
+                 </div>
 
-      <!-- AUTH FORM OVERLAY CONTENT (Only visible when Auth Mode IS active) -->
-      <transition
-        enter-active-class="transition duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] delay-100"
-        enter-from-class="opacity-0 translate-y-12"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition duration-300 ease-in"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 translate-y-12"
-      >
-        <div v-show="showAuthOverlay" class="profile-auth-overlay absolute inset-0 z-20 flex flex-col items-center justify-center px-6 overflow-y-auto pt-10 pb-32 custom-scrollbar">
-          
-          <!-- 关闭按钮 -->
-          <button @click="closeAuth" class="absolute top-8 right-6 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/30 transition-colors z-50">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          <!-- 顶部文字 -->
-          <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-white text-green-500 rounded-2xl mx-auto flex items-center justify-center text-3xl shadow-lg shadow-black/10 mb-6">
-              🌱
+                 <div class="inline-flex items-center mt-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full border border-white/20">
+                   <span class="w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>
+                   <span class="text-xs font-medium text-white">{{ userRoleName }} ID: {{ currentUser.id || currentUser.userId }}</span>
+                 </div>
+               </template>
+               
+               <template v-else>
+                 <button @click="openAuth" class="inline-flex items-center px-6 py-2.5 bg-white/20 border border-white/30 backdrop-blur-md text-white font-bold rounded-full shadow-lg hover:bg-white/30 hover:scale-105 active:scale-95 transition-all group">
+                   <span class="text-xl mr-3 font-extrabold tracking-wide">未登录</span>
+                   <span class="w-[1px] h-4 bg-white/50 mr-3"></span>
+                   <span class="text-sm font-medium">点击登录 / 注册</span>
+                   <span class="ml-2 group-hover:translate-x-1 transition-transform">👉</span>
+                 </button>
+               </template>
             </div>
-            <h1 class="text-3xl font-extrabold text-white tracking-tight">LeafQuery</h1>
-            <p class="text-green-100 font-medium mt-2">{{ isLoginMode ? '欢迎回来，登录您的账号' : '创建新账号，开启智能诊断' }}</p>
-          </div>
+          </transition>
 
-          <!-- 表单主容器 -->
-          <div class="profile-auth-card w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-2xl shadow-green-900/50 dark:shadow-[0_24px_60px_rgba(2,6,23,0.5)] transition-colors">
-            <form @submit.prevent="handleSubmit" class="space-y-4">
+          <!-- AUTH FORM OVERLAY CONTENT (Only visible when Auth Mode IS active) -->
+          <transition
+            enter-active-class="transition duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] delay-100"
+            enter-from-class="opacity-0 translate-y-12"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-300 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 translate-y-12"
+          >
+            <div v-show="showAuthOverlay" class="profile-auth-overlay absolute inset-0 z-20 flex flex-col items-center justify-center px-6 overflow-y-auto pt-10 pb-32 custom-scrollbar">
               
-              <!-- 错误提示 -->
-              <div v-if="errorMessage" class="p-3 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-300 text-sm rounded-xl text-center font-bold animate-pulse">
-                {{ errorMessage }}
-              </div>
-
-              <!-- 账号 (邮箱/手机号/用户名) -->
-              <div class="space-y-1.5">
-                <label class="text-sm font-bold text-slate-700 ml-1">账号 <span v-if="!isLoginMode" class="text-red-500">*</span></label>
-                <input 
-                  v-model="form.username"
-                  type="text" 
-                  placeholder="用户名 / 手机号 / 邮箱" 
-                  class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
-                  required
-                />
-              </div>
-
-              <!-- 密码 -->
-              <div class="space-y-1.5">
-                <label class="text-sm font-bold text-slate-700 ml-1">密码 <span v-if="!isLoginMode" class="text-red-500">*</span></label>
-                <input 
-                  v-model="form.password"
-                  type="password" 
-                  placeholder="请输入密码" 
-                  class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
-                  required
-                />
-              </div>
-
-              <!-- 仅注册时显示的扩展表单区 -->
-              <transition
-                enter-active-class="transition-all duration-300 ease-out"
-                enter-from-class="opacity-0 -translate-y-4 max-h-0"
-                enter-to-class="opacity-100 translate-y-0 max-h-[500px]"
-                leave-active-class="transition-all duration-200 ease-in"
-                leave-from-class="opacity-100 translate-y-0 max-h-[500px]"
-                leave-to-class="opacity-0 -translate-y-4 max-h-0"
-              >
-                <div v-if="!isLoginMode" class="space-y-4 overflow-hidden pt-1">
-                  <!-- 确认密码 -->
-                  <div class="space-y-1.5">
-                    <label class="text-sm font-bold text-slate-700 ml-1">确认密码 <span class="text-red-500">*</span></label>
-                    <input 
-                      v-model="form.confirmPassword"
-                      type="password" 
-                      placeholder="请再次输入密码" 
-                      class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
-                      :required="!isLoginMode"
-                    />
-                  </div>
-
-                  <!-- 手机号码 -->
-                  <div class="space-y-1.5">
-                    <label class="text-sm font-bold text-slate-700 ml-1">手机号 <span class="text-red-500">*</span></label>
-                    <input 
-                      v-model="form.phoneNumber"
-                      type="tel" 
-                      placeholder="请输入真实手机号码" 
-                      class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
-                      :required="!isLoginMode"
-                    />
-                  </div>
-                </div>
-              </transition>
-
-              <!-- 提交按钮 -->
-              <button 
-                type="submit" 
-                :disabled="isLoading"
-                class="w-full bg-green-500 hover:bg-green-600 dark:bg-emerald-400 dark:hover:bg-emerald-300 active:scale-[0.98] disabled:bg-green-300 dark:disabled:bg-emerald-300/60 text-white dark:text-slate-950 py-4 rounded-xl font-extrabold text-lg shadow-lg shadow-green-500/30 dark:shadow-emerald-500/20 transition-all mt-6 flex items-center justify-center space-x-2"
-              >
-                <svg v-if="isLoading" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <!-- 关闭按钮 -->
+              <button @click="closeAuth" class="absolute top-8 right-6 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/30 transition-colors z-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span>{{ isLoginMode ? '立即登录' : '提交注册' }}</span>
               </button>
-            </form>
 
-            <!-- 切换模式按钮 -->
-            <div class="mt-6 text-center">
-              <button @click="toggleMode" class="text-slate-500 dark:text-slate-400 font-medium text-sm hover:text-green-600 dark:hover:text-emerald-300 transition-colors">
-                {{ isLoginMode ? '还没有账号？点击这里注册' : '已有账号？返回登录' }}
-              </button>
+              <!-- 顶部文字 -->
+              <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-white text-green-500 rounded-2xl mx-auto flex items-center justify-center text-3xl shadow-lg shadow-black/10 mb-6">
+                  🌱
+                </div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">LeafQuery</h1>
+                <p class="text-green-100 font-medium mt-2">{{ isLoginMode ? '欢迎回来，登录您的账号' : '创建新账号，开启智能诊断' }}</p>
+              </div>
+
+              <!-- 表单主容器 -->
+              <div class="profile-auth-card w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] p-8 shadow-2xl shadow-green-900/50 dark:shadow-[0_24px_60px_rgba(2,6,23,0.5)] transition-colors">
+                <form @submit.prevent="handleSubmit" class="space-y-4">
+                  
+                  <!-- 错误提示 -->
+                  <div v-if="errorMessage" class="p-3 bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-300 text-sm rounded-xl text-center font-bold animate-pulse">
+                    {{ errorMessage }}
+                  </div>
+
+                  <!-- 账号 (邮箱/手机号/用户名) -->
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-bold text-slate-700 ml-1">账号 <span v-if="!isLoginMode" class="text-red-500">*</span></label>
+                    <input 
+                      v-model="form.username"
+                      type="text" 
+                      placeholder="用户名 / 手机号 / 邮箱" 
+                      class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
+                      required
+                    />
+                  </div>
+
+                  <!-- 密码 -->
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-bold text-slate-700 ml-1">密码 <span v-if="!isLoginMode" class="text-red-500">*</span></label>
+                    <input 
+                      v-model="form.password"
+                      type="password" 
+                      placeholder="请输入密码" 
+                      class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
+                      required
+                    />
+                  </div>
+
+                  <!-- 仅注册时显示的扩展表单区 -->
+                  <transition
+                    enter-active-class="transition-all duration-300 ease-out"
+                    enter-from-class="opacity-0 -translate-y-4 max-h-0"
+                    enter-to-class="opacity-100 translate-y-0 max-h-[500px]"
+                    leave-active-class="transition-all duration-200 ease-in"
+                    leave-from-class="opacity-100 translate-y-0 max-h-[500px]"
+                    leave-to-class="opacity-0 -translate-y-4 max-h-0"
+                  >
+                    <div v-if="!isLoginMode" class="space-y-4 overflow-hidden pt-1">
+                      <!-- 确认密码 -->
+                      <div class="space-y-1.5">
+                        <label class="text-sm font-bold text-slate-700 ml-1">确认密码 <span class="text-red-500">*</span></label>
+                        <input 
+                          v-model="form.confirmPassword"
+                          type="password" 
+                          placeholder="请再次输入密码" 
+                          class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
+                          :required="!isLoginMode"
+                        />
+                      </div>
+
+                      <!-- 手机号码 -->
+                      <div class="space-y-1.5">
+                        <label class="text-sm font-bold text-slate-700 ml-1">手机号 <span class="text-red-500">*</span></label>
+                        <input 
+                          v-model="form.phoneNumber"
+                          type="tel" 
+                          placeholder="请输入真实手机号码" 
+                          class="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white transition-all font-medium"
+                          :required="!isLoginMode"
+                        />
+                      </div>
+                    </div>
+                  </transition>
+
+                  <!-- 提交按钮 -->
+                  <button 
+                    type="submit" 
+                    :disabled="isLoading"
+                    class="w-full bg-green-500 hover:bg-green-600 dark:bg-emerald-400 dark:hover:bg-emerald-300 active:scale-[0.98] disabled:bg-green-300 dark:disabled:bg-emerald-300/60 text-white dark:text-slate-950 py-4 rounded-xl font-extrabold text-lg shadow-lg shadow-green-500/30 dark:shadow-emerald-500/20 transition-all mt-6 flex items-center justify-center space-x-2"
+                  >
+                    <svg v-if="isLoading" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>{{ isLoginMode ? '立即登录' : '提交注册' }}</span>
+                  </button>
+                </form>
+
+                <!-- 切换模式按钮 -->
+                <div class="mt-6 text-center">
+                  <button @click="toggleMode" class="text-slate-500 dark:text-slate-400 font-medium text-sm hover:text-green-600 dark:hover:text-emerald-300 transition-colors">
+                    {{ isLoginMode ? '还没有账号？点击这里注册' : '已有账号？返回登录' }}
+                  </button>
+                </div>
+                
+              </div>
             </div>
-            
-          </div>
-        </div>
-      </transition>
-      </div> <!-- Close immersive header -->
+          </transition>
+        </div> <!-- Close immersive header transition container -->
       </div> <!-- Close col-span-4 -->
 
       <!-- Right Content Area (PC) -->
@@ -386,61 +486,61 @@ const handleLogout = () => {
         >
           <div v-show="!showAuthOverlay" class="px-6 lg:px-0 -mt-12 lg:mt-0 relative z-20 mb-8 lg:mb-0" v-motion-slide-visible-once-bottom>
             <div class="profile-stats-card bg-white dark:bg-slate-900 rounded-[2rem] p-6 lg:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_18px_50px_rgba(2,6,23,0.36)] flex justify-between divide-x divide-slate-100 dark:divide-slate-800 relative lg:hover:shadow-lg transition-colors transition-shadow border border-transparent dark:border-slate-800">
-            <div class="flex-1 text-center px-2">
-              <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ recordCount }}</div>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">识别次数</div>
-            </div>
-            <div class="flex-1 text-center px-2">
-              <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ diseaseCount }}</div>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">发现病害</div>
-            </div>
-            <div class="flex-1 text-center px-2">
-              <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ coveredAreaCount }}</div>
-              <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">覆盖区域</div>
+              <div class="flex-1 text-center px-2">
+                <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ recordCount }}</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">识别次数</div>
+              </div>
+              <div class="flex-1 text-center px-2">
+                <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ diseaseCount }}</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">发现病害</div>
+              </div>
+              <div class="flex-1 text-center px-2">
+                <div class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-1">{{ coveredAreaCount }}</div>
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wide">覆盖区域</div>
+              </div>
             </div>
           </div>
-        </div>
-      </transition>
+        </transition>
 
-    <!-- Menu List -->
-    <transition
-      enter-active-class="transition duration-500 ease-out delay-300"
-      enter-from-class="opacity-0 translate-y-8"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition duration-300 ease-in"
-      leave-from-class="opacity-100 translate-y-0"
-      leave-to-class="opacity-0 translate-y-8"
-    >
-      <div v-show="!showAuthOverlay" class="profile-menu px-6 lg:px-0 space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 pb-20 lg:pb-0 relative z-[5]">
-        <button 
-          v-for="(item, index) in menuItems" 
-          :key="index"
-          @click="handleMenuClick(item)"
-          class="profile-menu-item w-full bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-2xl lg:rounded-[1.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 flex justify-between items-center active:scale-[0.98] lg:hover:-translate-y-1 lg:hover:shadow-green-900/10 transition-all hover:shadow-lg hover:shadow-green-900/5 group"
+        <!-- Menu List -->
+        <transition
+          enter-active-class="transition duration-500 ease-out delay-300"
+          enter-from-class="opacity-0 translate-y-8"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-active-class="transition duration-300 ease-in"
+          leave-from-class="opacity-100 translate-y-0"
+          leave-to-class="opacity-0 translate-y-8"
         >
-          <div class="flex items-center space-x-4 lg:space-x-5">
-            <div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-xl lg:text-2xl group-hover:bg-green-50 dark:group-hover:bg-emerald-500/10 group-hover:scale-110 transition-all duration-300">
-               {{ item.icon }}
-            </div>
-            <span class="font-bold text-slate-700 dark:text-slate-100 lg:text-lg">{{ item.label }}</span>
-          </div>
-          <div class="flex items-center space-x-3">
-            <span v-if="item.badge" class="bg-red-500 text-white text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full shadow-red-500/30 shadow-lg">{{ item.badge }}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-300 dark:text-slate-600 transform group-hover:translate-x-1 lg:group-hover:translate-x-2 lg:group-hover:text-green-500 dark:lg:group-hover:text-emerald-300 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </div>
-        </button>
+          <div v-show="!showAuthOverlay" class="profile-menu px-6 lg:px-0 space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 pb-20 lg:pb-0 relative z-[5]">
+            <button 
+              v-for="(item, index) in menuItems" 
+              :key="index"
+              @click="handleMenuClick(item)"
+              class="profile-menu-item w-full bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-2xl lg:rounded-[1.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 flex justify-between items-center active:scale-[0.98] lg:hover:-translate-y-1 lg:hover:shadow-green-900/10 transition-all hover:shadow-lg hover:shadow-green-900/5 group"
+            >
+              <div class="flex items-center space-x-4 lg:space-x-5">
+                <div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-xl lg:text-2xl group-hover:bg-green-50 dark:group-hover:bg-emerald-500/10 group-hover:scale-110 transition-all duration-300">
+                   {{ item.icon }}
+                </div>
+                <span class="font-bold text-slate-700 dark:text-slate-100 lg:text-lg">{{ item.label }}</span>
+              </div>
+              <div class="flex items-center space-x-3">
+                <span v-if="item.badge" class="bg-red-500 text-white text-[10px] lg:text-xs font-bold px-2 py-0.5 rounded-full shadow-red-500/30 shadow-lg">{{ item.badge }}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-300 dark:text-slate-600 transform group-hover:translate-x-1 lg:group-hover:translate-x-2 lg:group-hover:text-green-500 dark:lg:group-hover:text-emerald-300 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
 
-        <button 
-          v-if="currentUser"
-          @click="handleLogout"
-          class="profile-logout-button w-full lg:col-span-2 bg-white dark:bg-slate-900 text-red-500 dark:text-rose-300 py-4 lg:py-5 rounded-[1.25rem] lg:rounded-[1.5rem] font-black text-[15px] lg:text-base shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 active:scale-[0.98] lg:hover:shadow-red-500/10 transition-all hover:bg-red-50 dark:hover:bg-rose-500/10 mt-8 lg:mt-4"
-        >
-          退出当前账号
-        </button>
-        </div>
-      </transition>
+            <button 
+              v-if="currentUser"
+              @click="handleLogout"
+              class="profile-logout-button w-full lg:col-span-2 bg-white dark:bg-slate-900 text-red-500 dark:text-rose-300 py-4 lg:py-5 rounded-[1.25rem] lg:rounded-[1.5rem] font-black text-[15px] lg:text-base shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 active:scale-[0.98] lg:hover:shadow-red-500/10 transition-all hover:bg-red-50 dark:hover:bg-rose-500/10 mt-8 lg:mt-4"
+            >
+              退出当前账号
+            </button>
+          </div>
+        </transition>
       </div> <!-- End Right Content Area -->
     </div> <!-- End Grid Container -->
   </div>

@@ -80,8 +80,34 @@ public class DiscoveryService {
         qnaMapper.deletePostById(postId);
     }
 
-    public void likePost(Long postId, Integer likes) {
-        qnaMapper.updateLikes(postId, likes);
+    /**
+     * Toggle like for a post by a specific user.
+     * Returns a map with { liked: boolean, likes: int }
+     */
+    public java.util.Map<String, Object> toggleLike(Long postId, Long userId) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        boolean alreadyLiked = qnaMapper.countLikeExists(postId, userId) > 0;
+
+        if (alreadyLiked) {
+            qnaMapper.deleteLike(postId, userId);
+        } else {
+            qnaMapper.insertLike(postId, userId);
+        }
+
+        // Recompute authoritative like count from qna_like table
+        int newCount = qnaMapper.countLikesByPostId(postId);
+        qnaMapper.updateLikes(postId, newCount);
+
+        result.put("liked", !alreadyLiked);
+        result.put("likes", newCount);
+        return result;
+    }
+
+    /**
+     * Get all post IDs that a user has liked.
+     */
+    public java.util.List<Long> getLikedPostIds(Long userId) {
+        return qnaMapper.selectLikedPostIdsByUserId(userId);
     }
 
     public java.util.Map<String, Object> processComment(QnaComment comment) {

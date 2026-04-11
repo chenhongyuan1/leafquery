@@ -12,17 +12,43 @@
     </select>
 
     <select id="selectPublished" resultType="com.example.leafquery.entity.Announcement">
-        SELECT a.*, au.nickname as admin_name
+        SELECT a.*, au.nickname as admin_name,
+        <choose>
+            <when test="userId != null">
+                CASE WHEN uar.id IS NULL THEN 0 ELSE 1 END AS `read`
+            </when>
+            <otherwise>
+                0 AS `read`
+            </otherwise>
+        </choose>
         FROM announcement a
         LEFT JOIN admin_user au ON a.admin_id = au.admin_id
+        <if test="userId != null">
+            LEFT JOIN user_announcement_read uar
+                ON uar.announcement_id = a.id
+               AND uar.user_id = #{userId}
+        </if>
         WHERE a.status = 1
         ORDER BY a.created_at DESC
     </select>
 
     <select id="selectPopup" resultType="com.example.leafquery.entity.Announcement">
-        SELECT a.*, au.nickname as admin_name
+        SELECT a.*, au.nickname as admin_name,
+        <choose>
+            <when test="userId != null">
+                CASE WHEN uar.id IS NULL THEN 0 ELSE 1 END AS `read`
+            </when>
+            <otherwise>
+                0 AS `read`
+            </otherwise>
+        </choose>
         FROM announcement a
         LEFT JOIN admin_user au ON a.admin_id = au.admin_id
+        <if test="userId != null">
+            LEFT JOIN user_announcement_read uar
+                ON uar.announcement_id = a.id
+               AND uar.user_id = #{userId}
+        </if>
         WHERE a.status = 1 AND a.display_mode = 'popup'
         ORDER BY a.created_at DESC
     </select>

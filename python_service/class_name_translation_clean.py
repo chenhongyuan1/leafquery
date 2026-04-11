@@ -24,8 +24,13 @@ CROP_NAME_ZH = {
 
 
 def _catalog_path() -> str:
+    env_path = os.environ.get("DETECTION_METADATA_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+        
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "docs",
         "detection_target_metadata_clean.json",
     )
 

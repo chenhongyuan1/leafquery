@@ -3,79 +3,16 @@ import { defineStore } from 'pinia'
 import axios from 'axios'
 import { cropLibrary, getCropMeta } from '../constants/farmCatalog'
 
-const LOCAL_STORAGE_KEY = 'farm_data_local'
-const CLOUD_CACHE_KEY = 'farm_data_cloud'
-const HEALTHY_KEYWORDS = ['健康', 'healthy', 'unknown', '未发现', '暂无异常']
-
-const parseJson = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback
-  } catch (error) {
-    console.error('Failed to parse stored farm data', error)
-    return fallback
-  }
-}
-
-const hasChineseText = (value) => typeof value === 'string' && /[\u4e00-\u9fff]/.test(value)
-
-const getFriendlySyncError = (error, fallbackMessage) => {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status
-    const serverMessage = error.response?.data?.message
-
-    if (hasChineseText(serverMessage)) {
-      return serverMessage
-    }
-
-    if (!error.response) {
-      return '网络连接异常，暂时无法同步农场数据，请稍后重试。'
-    }
-
-    switch (status) {
-      case 400:
-        return '请求参数有误，暂时无法完成本次农场同步。'
-      case 401:
-        return '登录状态已失效，请重新登录后再试。'
-      case 403:
-        return '当前账号没有权限执行这项农场操作。'
-      case 404:
-        return '未找到对应的农场数据，请刷新页面后重试。'
-      case 409:
-        return '农场数据已发生变化，请刷新页面后重试。'
-      case 500:
-        return fallbackMessage
-      default:
-        return fallbackMessage
-    }
-  }
-
-  if (error instanceof Error && hasChineseText(error.message)) {
-    return error.message
-  }
-
-  return fallbackMessage
-}
-
-const getStoredUser = () => {
-  return parseJson(localStorage.getItem('user'), null)
-}
-
-const sanitizeLocation = (locationData = {}) => {
-  const source = locationData.location ? locationData.location : locationData
-  return {
-    id: String(source.id ?? source.locationId ?? ''),
-    province: source.province || '',
-    city: source.city || '',
-    region: source.region || ''
-  }
-}
-
-const normalizeStageMode = (value, fallback = 'MANUAL') => {
-  if (typeof value !== 'string' || !value.trim()) {
-    return fallback
-  }
-  return value.trim().toUpperCase() === 'AUTO' ? 'AUTO' : 'MANUAL'
-}
+import {
+  LOCAL_STORAGE_KEY,
+  CLOUD_CACHE_KEY,
+  HEALTHY_KEYWORDS,
+  getFriendlySyncError,
+  parseJson,
+  getStoredUser,
+  sanitizeLocation,
+  normalizeStageMode
+} from './farmUtils'
 
 export const useFarmStore = defineStore('farm-cloud', () => {
   const crops = ref([])
@@ -96,6 +33,19 @@ export const useFarmStore = defineStore('farm-cloud', () => {
       identificationHistory: identificationHistory.value
     }))
   }
+
+  const normalizeHistoryRecord = (item = {}, index = 0) => ({
+    id: item.id ?? Date.now() + index,
+    pestName: item.pestName || item.name || '未知结果',
+    confidence: Number(item.confidence || 0),
+    time: item.createTime || item.time || new Date().toISOString(),
+    cropId: item.cropId ?? item.crop?.id ?? activeCropId.value ?? null,
+    cropName: item.cropName || item.crop?.name || '',
+    locationId: String(item.locationId ?? item.crop?.locationId ?? ''),
+    city: item.city || item.crop?.city || '',
+    region: item.region || item.crop?.region || '',
+    imageUrl: item.imageUrl || ''
+  })
 
   const hydrateCrops = (items = [], target = null) => {
     const normalized = items.map((item) => {
@@ -479,24 +429,106 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     return crops.value.find(crop => String(crop.id) === String(activeCropId.value)) || null
   })
 
-  const addIdentification = (record) => {
+  const addIdentification = (record, target = getCurrentPersistenceTarget()) => {
     const crop = activeCrop.value
-    identificationHistory.value.unshift({
-      id: record.id || Date.now(),
-      pestName: record.pestName,
-      confidence: Number(record.confidence || 0),
-      time: record.time || new Date().toISOString(),
+    identificationHistory.value.unshift(normalizeHistoryRecord({
+      ...record,
       cropId: record.cropId ?? crop?.id ?? activeCropId.value,
       cropName: record.cropName || crop?.name || '',
+      locationId: record.locationId ?? crop?.locationId ?? '',
+      city: record.city || crop?.city || '',
+      region: record.region || crop?.region || ''
+    }))
+    if (identificationHistory.value.length > 100) {
+      identificationHistory.value = identificationHistory.value.slice(0, 100)
+    }
+    persistState(target)
+    return identificationHistory.value[0]
+  }
+
+  const saveIdentification = async (record) => {
+    const user = getStoredUser()
+    const crop = activeCrop.value
+    const payload = {
+      userId: user?.userId ?? null,
+      cropId: record.cropId ?? crop?.id ?? activeCropId.value ?? null,
+      cropName: record.cropName || crop?.name || '',
+      pestName: record.pestName || record.name || '',
+      confidence: Number(record.confidence || 0),
       locationId: String(record.locationId ?? crop?.locationId ?? ''),
       city: record.city || crop?.city || '',
       region: record.region || crop?.region || '',
       imageUrl: record.imageUrl || ''
-    })
-    if (identificationHistory.value.length > 100) {
-      identificationHistory.value = identificationHistory.value.slice(0, 100)
     }
-    persistState(getCurrentPersistenceTarget())
+
+    if (!user?.userId) {
+      syncMode.value = 'local'
+      addIdentification(payload, 'local')
+      return true
+    }
+
+    try {
+      const response = await axios.post('/api/record/add', payload)
+      if (response.data?.code !== 200) {
+        throw new Error(response.data?.message || 'Failed to save record')
+      }
+      await loadRemoteHistory(user.userId)
+      syncMode.value = 'cloud'
+      return true
+    } catch (error) {
+      setSyncError(getFriendlySyncError(error, 'Cloud record save failed, falling back to local cache.'))
+      syncMode.value = 'cloud-fallback'
+      addIdentification(payload, 'cloud')
+      return false
+    }
+  }
+
+  const removeLocalIdentification = (recordId, target = getCurrentPersistenceTarget()) => {
+    identificationHistory.value = identificationHistory.value.filter(item => String(item.id) !== String(recordId))
+    persistState(target)
+    return true
+  }
+
+  const removeIdentification = async (recordId) => {
+    const user = getStoredUser()
+    if (!user?.userId) {
+      return removeLocalIdentification(recordId, 'local')
+    }
+
+    try {
+      await axios.delete(`/api/record/${recordId}`)
+      await loadRemoteHistory(user.userId)
+      syncMode.value = 'cloud'
+      return true
+    } catch (error) {
+      setSyncError(getFriendlySyncError(error, 'Cloud record deletion failed, falling back to local cache.'))
+      syncMode.value = 'cloud-fallback'
+      return removeLocalIdentification(recordId, 'cloud')
+    }
+  }
+
+  const clearLocalIdentificationHistory = (target = getCurrentPersistenceTarget()) => {
+    identificationHistory.value = []
+    persistState(target)
+    return true
+  }
+
+  const clearIdentificationHistory = async () => {
+    const user = getStoredUser()
+    if (!user?.userId) {
+      return clearLocalIdentificationHistory('local')
+    }
+
+    try {
+      await axios.delete(`/api/record/clear?userId=${user.userId}`)
+      await loadRemoteHistory(user.userId)
+      syncMode.value = 'cloud'
+      return true
+    } catch (error) {
+      setSyncError(getFriendlySyncError(error, 'Cloud record clear failed, falling back to local cache.'))
+      syncMode.value = 'cloud-fallback'
+      return clearLocalIdentificationHistory('cloud')
+    }
   }
 
   const getHistoryByCrop = (cropId) => {
@@ -540,6 +572,9 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     setActiveCrop,
     syncIdentificationHistory,
     addIdentification,
+    saveIdentification,
+    removeIdentification,
+    clearIdentificationHistory,
     getHistoryByCrop,
     getTopDiseases
   }

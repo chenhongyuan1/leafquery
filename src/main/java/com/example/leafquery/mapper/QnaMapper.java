@@ -3,6 +3,7 @@ package com.example.leafquery.mapper;
 import com.example.leafquery.entity.QnaPost;
 import com.example.leafquery.entity.QnaComment;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 @Mapper
@@ -31,4 +32,15 @@ public interface QnaMapper {
     int deleteExpertReply(Long postId);
 
     int countPosts();
+
+    // ========== Like tracking ==========
+    int countLikeExists(@Param("postId") Long postId, @Param("userId") Long userId);
+
+    int insertLike(@Param("postId") Long postId, @Param("userId") Long userId);
+
+    int deleteLike(@Param("postId") Long postId, @Param("userId") Long userId);
+
+    int countLikesByPostId(@Param("postId") Long postId);
+
+    List<Long> selectLikedPostIdsByUserId(@Param("userId") Long userId);
 }

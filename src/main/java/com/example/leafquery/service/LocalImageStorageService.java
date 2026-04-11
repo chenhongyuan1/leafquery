@@ -10,6 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 
 @Service
 public class LocalImageStorageService {
@@ -17,9 +20,9 @@ public class LocalImageStorageService {
     private static final String DEFAULT_EXTENSION = ".jpg";
     private final Path uploadRoot;
 
-    public LocalImageStorageService() {
-        String projectDir = System.getProperty("user.dir");
-        this.uploadRoot = Path.of(projectDir, "vue-frontend", "public", "images", "uploads");
+    public LocalImageStorageService(
+            @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./vue-frontend/public/images/uploads}") String uploadDirPath) {
+        this.uploadRoot = Path.of(uploadDirPath).toAbsolutePath().normalize();
     }
 
     public String saveIdentificationImage(MultipartFile file) {
@@ -40,7 +43,43 @@ public class LocalImageStorageService {
             Path targetPath = identificationDir.resolve(filename);
 
             try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                long fileSize = file.getSize();
+                // 核心控制：如果图片体积超过 1MB，强行进行缩放压缩，防止把 Dify/火山 API 网关打崩
+                if (fileSize > 1048576) {
+                    BufferedImage originalImage = ImageIO.read(inputStream);
+                    if (originalImage != null) {
+                        int width = originalImage.getWidth();
+                        int height = originalImage.getHeight();
+                        int MAX_DIMENSION = 1024; // 锁定最大边长 1024 像素
+
+                        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                            double scale = Math.min((double) MAX_DIMENSION / width, (double) MAX_DIMENSION / height);
+                            width = (int) (width * scale);
+                            height = (int) (height * scale);
+                        }
+
+                        // 洗掉 PNG 的空白透明通道，以 RGB 格式写入防黑边
+                        BufferedImage resizedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                        Graphics2D g = resizedImage.createGraphics();
+                        g.setColor(java.awt.Color.WHITE);
+                        g.fillRect(0, 0, width, height);
+                        g.drawImage(originalImage, 0, 0, width, height, null);
+                        g.dispose();
+
+                        // 强制将扩展名锁死为 .jpg，利用 JPG 的高压缩率
+                        extension = ".jpg";
+                        filename = UUID.randomUUID() + extension;
+                        targetPath = identificationDir.resolve(filename);
+
+                        ImageIO.write(resizedImage, "jpg", targetPath.toFile());
+                    } else {
+                        // 回退：如果 ImageIO 读不出（比如极其诡异的格式），则原样保存
+                        Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } else {
+                    // 低于 1MB 的图直接保存
+                    Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
 
             return new StoredImageReference(

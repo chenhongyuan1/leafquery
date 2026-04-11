@@ -14,12 +14,12 @@ public class FavoriteService {
     private FavoriteMapper favoriteMapper;
 
     public boolean toggleFavorite(Favorite favorite) {
-        // 先查询是否已经存在
-        Favorite existing = favoriteMapper.selectByUserIdAndItem(favorite.getUserId(), favorite.getItemType(),
-                favorite.getItemId());
-        if (existing != null) {
-            // 存在则取消收藏
-            return favoriteMapper.deleteFavorite(existing.getId()) > 0;
+        // 先删除所有匹配的记录（包括可能的重复数据）
+        int deleted = favoriteMapper.deleteByUserIdAndItem(
+                favorite.getUserId(), favorite.getItemType(), favorite.getItemId());
+        if (deleted > 0) {
+            // 存在则取消收藏（已删除）
+            return true;
         } else {
             // 不存在则添加收藏
             return favoriteMapper.insertFavorite(favorite) > 0;

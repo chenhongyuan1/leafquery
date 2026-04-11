@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import axios from 'axios'
+import { requireLoggedInUser } from '../../utils/accountSecurity'
 
 const props = defineProps({
   id: Number,
@@ -14,7 +15,9 @@ const props = defineProps({
   expertReply: Object,
   expertId: Number,
   likes: { type: Number, default: 0 },
-  comments: { type: Array, default: () => [] }
+  comments: { type: Array, default: () => [] },
+  // Accept a set of liked post IDs from parent to restore state
+  likedPostIds: { type: Set, default: () => new Set() }
 })
 
 const emit = defineEmits(['delete', 'refresh'])
@@ -25,36 +28,59 @@ const localExpertReply = ref(props.expertReply)
 const showComments = ref(false)
 const newComment = ref('')
 const previewImage = ref(null)
+const likeSubmitting = ref(false)
+const commentSubmitting = ref(false)
 
-import { watch } from 'vue'
 watch(() => props.expertReply, (val) => {
   localExpertReply.value = val
 })
 
+watch(() => props.likes, (val) => {
+  localLikes.value = val
+})
+
+// Restore liked state from parent's likedPostIds set
+watch(() => props.likedPostIds, (ids) => {
+  if (props.id && ids) {
+    isLiked.value = ids.has(props.id)
+  }
+}, { immediate: true })
+
 const toggleLike = async () => {
+  const user = requireLoggedInUser('请先登录后再点赞。')
+  if (!user || !props.id || likeSubmitting.value) return
+
+  likeSubmitting.value = true
+
+  // Optimistic UI update
   isLiked.value = !isLiked.value
   localLikes.value += isLiked.value ? 1 : -1
-  if (props.id) {
-    try {
-      await axios.put(`/api/discovery/qna/${props.id}/like`, { likes: localLikes.value })
-    } catch (e) {
-      console.error('点赞同步失败', e)
-      isLiked.value = !isLiked.value
-      localLikes.value += isLiked.value ? 1 : -1
+
+  try {
+    const res = await axios.post(`/api/discovery/qna/${props.id}/like`, {
+      userId: user.userId
+    })
+    if (res.data.code === 200) {
+      // Use authoritative server state
+      isLiked.value = res.data.liked
+      localLikes.value = res.data.likes
     }
+  } catch (e) {
+    console.error('点赞同步失败', e)
+    // Revert optimistic update
+    isLiked.value = !isLiked.value
+    localLikes.value += isLiked.value ? 1 : -1
+  } finally {
+    likeSubmitting.value = false
   }
 }
 
 const submitComment = async () => {
-  if (!newComment.value.trim()) return
+  if (!newComment.value.trim() || commentSubmitting.value) return
   
-  const userStr = localStorage.getItem('user')
-  if (!userStr) {
-    alert('请先登录后再发表评论！')
-    return
-  }
-  const user = JSON.parse(userStr)
-
+  const user = requireLoggedInUser('请先登录后再发表评论。')
+  if (!user) return
+  commentSubmitting.value = true
   try {
     const res = await axios.post(`/api/discovery/qna/${props.id}/comment`, {
       userId: user.userId,
@@ -88,6 +114,8 @@ const submitComment = async () => {
   } catch (error) {
     console.error('评论提交异常', error)
     alert('网络错误或评论提交失败')
+  } finally {
+    commentSubmitting.value = false
   }
 }
 
@@ -187,7 +215,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
           <span class="text-lg">💬</span>
           <span class="text-xs font-medium">{{ comments.length || '评论' }}</span>
         </button>
-        <button @click.stop="toggleLike" class="flex items-center space-x-1.5 transition-colors group">
+        <button @click.stop="toggleLike" :disabled="likeSubmitting" class="flex items-center space-x-1.5 transition-colors group disabled:cursor-not-allowed disabled:opacity-60">
           <span class="text-xl transition-transform duration-300 group-active:scale-75" :class="isLiked ? 'grayscale-0 scale-110 drop-shadow-sm' : 'grayscale opacity-60 hover:scale-110'">👍</span>
           <span class="text-xs font-medium" :class="{'text-amber-500': isLiked}">{{ localLikes || '赞' }}</span>
         </button>
@@ -230,7 +258,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
          <button 
            @click.stop="submitComment"
            class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold active:scale-90 transition-transform disabled:opacity-50 disabled:active:scale-100"
-           :disabled="!newComment.trim()"
+           :disabled="!newComment.trim() || commentSubmitting"
          >
            ↑
          </button>

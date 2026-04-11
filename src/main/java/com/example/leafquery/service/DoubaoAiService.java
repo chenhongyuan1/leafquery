@@ -90,22 +90,18 @@ public class DoubaoAiService {
     private String getTtsSpeaker() { return getConfig("tts.speaker", defaultTtsSpeaker); }
 
     /**
-     * 根据病虫害名称，调用豆包 AI 生成详细分析。
+     * 根据用户首次输入内容，调用豆包 AI 生成植保问答回复。
      *
-     * @param pestName 识别出的病虫害中文名称
-     * @return AI 生成的分析文本（Markdown 格式）
+     * @param pestName 用户首次输入的文本内容
+     * @return AI 生成的问答文本
      */
     public String analyzePest(String pestName) {
         try {
             String prompt = String.format(
-                    "你是一位农业植保专家。用户通过 AI 识别出了一种病虫害：【%s】。\n" +
-                            "请用中文提供以下信息，使用 Markdown 格式：\n" +
-                            "## 基本介绍\n简要说明该病虫害的基本特征。\n" +
-                            "## 危害症状\n描述对作物的具体危害表现。\n" +
-                            "## 发病条件\n说明容易发病的环境条件（温度、湿度等）。\n" +
-                            "## 防治方法\n### 农业防治\n### 化学防治\n### 生物防治\n" +
-                            "## 注意事项\n用药安全和注意要点。\n" +
-                            "请保持内容简洁实用，适合农民阅读。",
+                    "你是一位农业植保专家，请使用中文结合农业生产实际直接解答用户问题，" +
+                            "保持专业、准确、通俗易懂；如果用户提供的信息不足，请先说明还需要补充哪些关键信息。" +
+                            "不限定输出格式。\n" +
+                            "用户问题：%s",
                     pestName);
 
             // 构建请求体（豆包 Responses API 格式）

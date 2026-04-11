@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import NewsCard from '../../components/mobile/NewsCard.vue'
 import QnACard from '../../components/mobile/QnACard.vue'
-import { useFavoritesStore } from '../../stores/favorites'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
 
 const favStore = useFavoritesStore()
 const API_BASE = '/api/discovery'

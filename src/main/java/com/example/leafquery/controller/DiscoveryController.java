@@ -24,20 +24,46 @@ public class DiscoveryController {
     @Autowired
     private com.example.leafquery.service.AnnouncementService announcementService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./vue-frontend/public/images/uploads}")
+    private String uploadDirPath;
+
     // ========== 系统公告 ==========
     @GetMapping("/announcements")
-    public ResponseEntity<Map<String, Object>> getAnnouncements() {
+    public ResponseEntity<Map<String, Object>> getAnnouncements(@RequestParam(required = false) Long userId) {
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
-        res.put("data", announcementService.getPublished());
+        res.put("data", announcementService.getPublished(userId));
         return ResponseEntity.ok(res);
     }
 
     @GetMapping("/announcements/popup")
-    public ResponseEntity<Map<String, Object>> getPopupAnnouncements() {
+    public ResponseEntity<Map<String, Object>> getPopupAnnouncements(@RequestParam(required = false) Long userId) {
         Map<String, Object> res = new HashMap<>();
         res.put("code", 200);
-        res.put("data", announcementService.getPopup());
+        res.put("data", announcementService.getPopup(userId));
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/announcements/{announcementId}/read")
+    public ResponseEntity<Map<String, Object>> markAnnouncementAsRead(@PathVariable Long announcementId,
+            @RequestBody Map<String, Long> body) {
+        Map<String, Object> res = new HashMap<>();
+        Long userId = body.get("userId");
+        if (userId == null) {
+            res.put("code", 400);
+            res.put("message", "缺少 userId 参数");
+            return ResponseEntity.badRequest().body(res);
+        }
+
+        boolean success = announcementService.markAsRead(userId, announcementId);
+        if (!success) {
+            res.put("code", 404);
+            res.put("message", "公告不存在");
+            return ResponseEntity.status(404).body(res);
+        }
+
+        res.put("code", 200);
+        res.put("message", "success");
         return ResponseEntity.ok(res);
     }
 
@@ -155,11 +181,8 @@ public class DiscoveryController {
         }
 
         try {
-            // 获取项目根目录 (d:\LeafQuery\leafquery)
-            String projectDir = System.getProperty("user.dir");
-            // 构建上传目录到 vue-frontend/public/images/uploads/
-            String uploadDirPath = projectDir + File.separator + "vue-frontend" + File.separator + "public" + File.separator + "images" + File.separator + "uploads";
-            File uploadDir = new File(uploadDirPath);
+            // 使用配置的上传目录
+            File uploadDir = new File(uploadDirPath).getAbsoluteFile();
             if (!uploadDir.exists()) {
                 uploadDir.mkdirs();
             }
@@ -189,13 +212,27 @@ public class DiscoveryController {
         }
     }
 
-    @PutMapping("/qna/{postId}/like")
-    public ResponseEntity<Map<String, Object>> likePost(@PathVariable Long postId,
-            @RequestBody Map<String, Integer> body) {
+    @PostMapping("/qna/{postId}/like")
+    public ResponseEntity<Map<String, Object>> toggleLike(@PathVariable Long postId,
+            @RequestBody Map<String, Long> body) {
         Map<String, Object> res = new HashMap<>();
-        discoveryService.likePost(postId, body.get("likes"));
+        Long userId = body.get("userId");
+        if (userId == null) {
+            res.put("code", 400);
+            res.put("message", "缺少userId参数");
+            return ResponseEntity.badRequest().body(res);
+        }
+        Map<String, Object> result = discoveryService.toggleLike(postId, userId);
         res.put("code", 200);
-        res.put("message", "操作成功");
+        res.putAll(result);
+        return ResponseEntity.ok(res);
+    }
+
+    @GetMapping("/qna/liked")
+    public ResponseEntity<Map<String, Object>> getLikedPostIds(@RequestParam Long userId) {
+        Map<String, Object> res = new HashMap<>();
+        res.put("code", 200);
+        res.put("data", discoveryService.getLikedPostIds(userId));
         return ResponseEntity.ok(res);
     }
 

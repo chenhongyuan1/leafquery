@@ -26,26 +26,44 @@ PRIMARY_CONFIDENCE_THRESHOLD = float(
 )
 UNKNOWN_LABEL = "\u672a\u8bc6\u522b"
 
-# 用户类别 → YOLO 类名过滤的映射关系
-# "虫害" 匹配所有 targetType == "pest" 的类名
-# "水稻"/"玉米"/"小麦" 匹配 cropNames 包含对应作物的类名
-YOLO_SUPPORTED_CATEGORIES = {"水稻", "玉米", "小麦", "虫害"}
-
-model = YOLO(MODEL_PATH)
+# ── 兜底值：JSON 加载失败时使用 ──
+_FALLBACK_YOLO_SUPPORTED = {"水稻", "玉米", "小麦", "虫害"}
 
 
 def _load_category_index():
-    """加载 detection_target_metadata_clean.json，构建类名→作物和类型的索引。"""
-    catalog_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "detection_target_metadata_clean.json",
-    )
+    """加载 detection_target_metadata_clean.json，构建：
+    1. 类名 → 作物和类型的索引（用于 is_class_allowed 筛查）
+    2. yoloSupportedCategories（与 Java 端共享的用户类别集）
+    """
+    # 优先读取系统环境变量（生产环境通过环境变量绝对路径挂载防丢）
+    catalog_path = os.environ.get("DETECTION_METADATA_PATH")
+    if not (catalog_path and os.path.exists(catalog_path)):
+        catalog_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "docs",
+            "detection_target_metadata_clean.json",
+        )
+    supported = _FALLBACK_YOLO_SUPPORTED
     try:
         with open(catalog_path, "r", encoding="utf-8") as f:
             payload = json.load(f)
     except FileNotFoundError:
-        return {}
+        print(f"[WARN] Metadata file not found: {catalog_path}, using fallback categories")
+        return {}, supported
 
+    # ── 读取 yoloSupportedCategories ──
+    raw_cats = payload.get("yoloSupportedCategories", [])
+    if raw_cats:
+        loaded = {c.strip() for c in raw_cats if isinstance(c, str) and c.strip()}
+        if loaded:
+            supported = loaded
+            print(f"[INFO] Loaded yoloSupportedCategories from {catalog_path}: {supported}")
+        else:
+            print(f"[WARN] yoloSupportedCategories empty in {catalog_path}, using fallback")
+    else:
+        print(f"[WARN] yoloSupportedCategories not found in {catalog_path}, using fallback")
+
+    # ── 构建类名索引 ──
     targets = payload.get("targets", [])
     index = {}
     for item in targets:
@@ -55,10 +73,14 @@ def _load_category_index():
                 "crop_names": [c.strip() for c in item.get("cropNames", [])],
                 "target_type": item.get("targetType", "unknown"),
             }
-    return index
+    return index, supported
 
 
-CATEGORY_INDEX = _load_category_index()
+_loaded = _load_category_index()
+CATEGORY_INDEX = _loaded[0]
+YOLO_SUPPORTED_CATEGORIES = _loaded[1]
+
+model = YOLO(MODEL_PATH)
 
 
 def is_class_allowed(class_name, categories):

@@ -76,4 +76,25 @@
         SELECT COUNT(*) FROM qna_post
     </select>
 
+    <!-- ========== Like tracking ========== -->
+    <select id="countLikeExists" resultType="int">
+        SELECT COUNT(*) FROM qna_like WHERE post_id = #{postId} AND user_id = #{userId}
+    </select>
+
+    <insert id="insertLike">
+        INSERT IGNORE INTO qna_like (post_id, user_id) VALUES (#{postId}, #{userId})
+    </insert>
+
+    <delete id="deleteLike">
+        DELETE FROM qna_like WHERE post_id = #{postId} AND user_id = #{userId}
+    </delete>
+
+    <select id="countLikesByPostId" resultType="int">
+        SELECT COUNT(*) FROM qna_like WHERE post_id = #{postId}
+    </select>
+
+    <select id="selectLikedPostIdsByUserId" resultType="java.lang.Long">
+        SELECT post_id FROM qna_like WHERE user_id = #{userId}
+    </select>
+
 </mapper>

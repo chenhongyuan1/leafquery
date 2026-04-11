@@ -11,6 +11,9 @@ public interface FavoriteMapper {
 
     int deleteFavorite(@Param("id") Long id);
 
+    int deleteByUserIdAndItem(@Param("userId") Long userId, @Param("itemType") String itemType,
+            @Param("itemId") String itemId);
+
     Favorite selectByUserIdAndItem(@Param("userId") Long userId, @Param("itemType") String itemType,
             @Param("itemId") String itemId);
 

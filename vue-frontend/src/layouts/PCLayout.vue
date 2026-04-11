@@ -1,13 +1,23 @@
 <script setup>
-import { ref, computed, onMounted, markRaw, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, markRaw, nextTick } from 'vue'
 import axios from 'axios'
-import { useFavoritesStore } from '../stores/favorites'
+import { useFavoritesStore } from '../stores/favoritesCloud'
 import { useFarmStore } from '../stores/farmCloud'
 import {
+  AUTH_CHANGE_EVENT,
   clearUserSession,
   getStoredUser,
   persistUser
 } from '../utils/accountSecurity'
+import {
+  applyThemePreference,
+  syncThemePreference
+} from '../utils/themePreference'
+import {
+  fetchAnnouncements,
+  getLocalDismissedPopupIds,
+  dismissPopupAnnouncement
+} from '../utils/announcementReadState'
 
 // Import PC native components
 import PCIntro from '../views/pc/PCIntro.vue'
@@ -18,18 +28,20 @@ import PCSettings from '../views/pc/PCSettingsConnected.vue'
 
 // Components
 import ThemeToggle from '../components/common/ThemeToggle.vue'
+import PCNotifications from '../components/pc/PCNotifications.vue'
 
 const favStore = useFavoritesStore()
 const farmStore = useFarmStore()
 
 // ============ Theme ============
-const isDark = ref(localStorage.getItem('pc-theme') === 'dark')
+const isDark = ref(false)
 const isThemeTransitioning = ref(false)
+const handleThemeSync = () => {
+  isDark.value = document.documentElement.classList.contains('dark')
+}
 
 const applyTheme = (nextDark) => {
-  isDark.value = nextDark
-  localStorage.setItem('pc-theme', nextDark ? 'dark' : 'light')
-  document.documentElement.classList.toggle('dark', nextDark)
+  isDark.value = applyThemePreference(nextDark ? 'dark' : 'light') === 'dark'
 }
 
 const toggleTheme = (origin) => {
@@ -91,14 +103,55 @@ const isLoginMode = ref(true)
 const isLoading = ref(false)
 const errorMessage = ref('')
 const loginForm = ref({ username: '', password: '', confirmPassword: '', phoneNumber: '' })
+const handleAuthChange = () => {
+  currentUser.value = getStoredUser()
+  refreshPopupAnnouncement()
+}
+
+// ==== Popup Announcement ====
+const popupAnnouncement = ref(null)
+
+const refreshPopupAnnouncement = async () => {
+  try {
+    const popupAnnouncements = await fetchAnnouncements('/api/discovery/announcements/popup')
+    if (currentUser.value?.userId) {
+      popupAnnouncement.value = popupAnnouncements.find(item => !Boolean(item.read)) || null
+    } else {
+      const dismissedIds = getLocalDismissedPopupIds()
+      popupAnnouncement.value = popupAnnouncements.find(item => !dismissedIds.includes(Number(item.id))) || null
+    }
+  } catch (error) {
+    console.error('Failed to refresh popup announcement state', error)
+    popupAnnouncement.value = null
+  }
+}
+
+async function dismissPopup() {
+  if (!popupAnnouncement.value) return
+  try {
+    await dismissPopupAnnouncement(popupAnnouncement.value.id)
+  } catch (error) {
+    console.error('Failed to dismiss popup announcement', error)
+  } finally {
+    popupAnnouncement.value = null
+  }
+}
 
 onMounted(() => {
+  isDark.value = syncThemePreference('pc-theme') === 'dark'
+  window.addEventListener('storage', handleThemeSync)
+  window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
   currentUser.value = getStoredUser()
   if (currentUser.value?.userId) {
     favStore.loadFavorites(currentUser.value.userId)
   }
   farmStore.initialize()
-  document.documentElement.classList.toggle('dark', isDark.value)
+  refreshPopupAnnouncement()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('storage', handleThemeSync)
+  window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 
 const handleAuthSubmit = async () => {
@@ -239,6 +292,7 @@ const currentComponent = computed(() => {
       <header class="h-16 flex items-center justify-end border-b px-8 shrink-0"
               :class="isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'">
          <div class="flex items-center space-x-4">
+            <PCNotifications :isDark="isDark" />
             <!-- Theme Toggle -->
              <ThemeToggle :isDark="isDark" :disabled="isThemeTransitioning" @toggle="toggleTheme" />
          </div>
@@ -322,6 +376,39 @@ const currentComponent = computed(() => {
                 {{ isLoginMode ? '还没有账号？点击注册' : '已有账号？返回登录' }}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ============ POPUP ANNOUNCEMENT MODAL ============ -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div v-if="popupAnnouncement" class="fixed inset-0 z-[200] flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="dismissPopup"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col z-10 border dark:border-slate-800 border-slate-100">
+          <!-- Banner -->
+          <div class="bg-gradient-to-br from-indigo-500 to-purple-600 px-6 py-8 flex items-center justify-between z-0 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')]"></div>
+            <div class="relative z-10 pr-2">
+              <span class="inline-block px-2 py-1 bg-white/20 text-white text-[10px] uppercase font-bold rounded-lg mb-2 backdrop-blur-md border border-white/20">系统公告</span>
+              <h2 class="text-2xl font-bold text-white leading-tight drop-shadow-md break-words">{{ popupAnnouncement.title }}</h2>
+            </div>
+            <button @click="dismissPopup" class="relative z-10 w-8 h-8 shrink-0 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white font-bold active:scale-90 transition-all border border-white/20">✕</button>
+          </div>
+          <!-- Body -->
+          <div class="p-6 max-h-[40vh] overflow-y-auto">
+            <p class="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{{ popupAnnouncement.content }}</p>
+          </div>
+          <!-- Action -->
+          <div class="px-6 py-4 border-t dark:border-slate-800 border-slate-100 bg-slate-50 dark:bg-slate-900/50">
+            <button @click="dismissPopup" class="w-full bg-slate-900 dark:bg-green-500 hover:bg-slate-800 dark:hover:bg-green-600 text-white py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all">我知道了</button>
           </div>
         </div>
       </div>

@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import axios from 'axios'
 import NewsCard from '../../components/mobile/NewsCard.vue'
 import QnACard from '../../components/mobile/QnACard.vue'
-import { useFavoritesStore } from '../../stores/favorites'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
+import { AUTH_CHANGE_EVENT, getStoredUser as readStoredUser, requireLoggedInUser } from '../../utils/accountSecurity'
 
 const API_BASE = '/api/discovery'
 
@@ -19,6 +20,7 @@ const newsData = ref([])
 const plantsData = ref([])
 const knowledgeData = ref([])
 const qnaData = ref([])
+const likedPostIds = ref(new Set())
 
 const currentUser = ref(null)
 const selectedPlant = ref(null)
@@ -32,13 +34,15 @@ const postImages = ref([])
 const fileInput = ref(null)
 
 const getStoredUser = () => {
-  try {
-    const raw = localStorage.getItem('user')
-    return raw ? JSON.parse(raw) : null
-  } catch (error) {
-    console.error('Failed to parse current user', error)
-    return null
+  return readStoredUser()
+}
+
+const requireKnowledgeUser = (message) => {
+  const user = requireLoggedInUser(message)
+  if (user?.userId) {
+    currentUser.value = user
   }
+  return user
 }
 
 const safeParseJSON = (value) => {
@@ -174,18 +178,36 @@ const fetchQna = async () => {
   }
 }
 
-const hydrateUser = async () => {
+const fetchLikedPostIds = async () => {
+  try {
+    const user = currentUser.value
+    if (!user?.userId) return
+    const { data } = await axios.get(`${API_BASE}/qna/liked?userId=${user.userId}`)
+    if (data.code === 200 && Array.isArray(data.data)) {
+      likedPostIds.value = new Set(data.data)
+    }
+  } catch (e) { console.error('获取点赞状态失败', e) }
+}
+
+const hydrateKnowledgeSession = async () => {
   currentUser.value = getStoredUser()
-  if (currentUser.value?.userId) {
-    await favStore.loadFavorites(currentUser.value.userId)
-  }
+  await favStore.loadFavorites(currentUser.value?.userId)
+}
+
+const handleAuthChange = () => {
+  hydrateKnowledgeSession()
 }
 
 onMounted(async () => {
-  await hydrateUser()
+  window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
+  await hydrateKnowledgeSession()
   loading.value = true
-  await Promise.all([fetchNews(), fetchPlants(), fetchQna()])
+  await Promise.all([fetchNews(), fetchPlants(), fetchQna(), fetchLikedPostIds()])
   loading.value = false
+})
+
+onUnmounted(() => {
+  window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 
 const currentItems = computed(() => {
@@ -224,12 +246,16 @@ const selectPlant = async (plant) => {
 }
 
 const openPostModal = async () => {
-  await hydrateUser()
-  if (!currentUser.value?.userId) {
-    alert('请先登录后再提问。')
-    return
-  }
+  const user = requireKnowledgeUser('请先登录后再提问。')
+  if (!user) return
   isPosting.value = true
+}
+
+const handleFavoriteToggle = async (item) => {
+  const user = requireKnowledgeUser('请先登录后再收藏。')
+  if (!user) return
+
+  await favStore.toggleFavorite(item)
 }
 
 const handleImageUpload = () => {
@@ -398,7 +424,8 @@ const deletePost = async (postId) => {
           >
             <button
               class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm backdrop-blur transition hover:scale-105 dark:bg-slate-950/90"
-              @click.stop="favStore.toggleFavorite(item)"
+              :disabled="favStore.isFavoriteSubmitting"
+              @click.stop="handleFavoriteToggle(item)"
             >
               <span class="text-base">{{ favStore.isFavorite(item) ? '★' : '☆' }}</span>
             </button>
@@ -460,7 +487,8 @@ const deletePost = async (postId) => {
                 <div class="flex shrink-0 items-center gap-1.5">
                   <button
                     class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:scale-105 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    @click.stop="favStore.toggleFavorite(item)"
+                    :disabled="favStore.isFavoriteSubmitting"
+                    @click.stop="handleFavoriteToggle(item)"
                   >
                     <span class="text-base">{{ favStore.isFavorite(item) ? '★' : '☆' }}</span>
                   </button>
@@ -527,7 +555,8 @@ const deletePost = async (postId) => {
         >
           <button
             class="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm backdrop-blur transition hover:scale-105 dark:bg-slate-950/90"
-            @click.stop="favStore.toggleFavorite(item)"
+            :disabled="favStore.isFavoriteSubmitting"
+            @click.stop="handleFavoriteToggle(item)"
           >
             <span class="text-base">{{ favStore.isFavorite(item) ? '★' : '☆' }}</span>
           </button>
@@ -591,10 +620,11 @@ const deletePost = async (postId) => {
         <div class="flex items-center justify-between border-t border-slate-100 px-8 py-5 dark:border-slate-800">
           <button
             class="rounded-2xl px-5 py-3 text-sm font-bold transition"
+            :disabled="favStore.isFavoriteSubmitting"
             :class="favStore.isFavorite(selectedLibraryItem)
               ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'"
-            @click="favStore.toggleFavorite(selectedLibraryItem)"
+            @click="handleFavoriteToggle(selectedLibraryItem)"
           >
             {{ favStore.isFavorite(selectedLibraryItem) ? '已收藏图鉴' : '收藏图鉴' }}
           </button>
@@ -610,7 +640,7 @@ const deletePost = async (postId) => {
             ×
           </button>
           <div class="font-bold text-slate-800 dark:text-slate-100">资讯详情</div>
-          <button class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200" @click="favStore.toggleFavorite(selectedNewsItem)">
+          <button class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-200" :disabled="favStore.isFavoriteSubmitting" @click="handleFavoriteToggle(selectedNewsItem)">
             {{ favStore.isFavorite(selectedNewsItem) ? '★' : '☆' }}
           </button>
         </div>
@@ -706,6 +736,7 @@ const deletePost = async (postId) => {
           <QnACard
             v-bind="selectedQnaItem"
             :currentUserId="currentUser?.userId"
+            :likedPostIds="likedPostIds"
             class="mb-0 border-none shadow-none"
             @delete="deletePost(selectedQnaItem.id)"
             @refresh="fetchQna"

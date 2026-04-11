@@ -66,4 +66,48 @@ public class UserController {
             return ResponseEntity.status(401).body(response);
         }
     }
+
+    /**
+     * 修改用户名
+     */
+    @PutMapping("/update-username")
+    public ResponseEntity<Map<String, Object>> updateUsername(@RequestBody Map<String, Object> body) {
+        Map<String, Object> response = new HashMap<>();
+
+        Number userIdNum = (Number) body.get("userId");
+        String newUsername = (String) body.get("username");
+
+        if (userIdNum == null || newUsername == null || newUsername.trim().isEmpty()) {
+            response.put("code", 400);
+            response.put("message", "用户ID和新用户名不能为空");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        Long userId = userIdNum.longValue();
+        newUsername = newUsername.trim();
+
+        // 检查用户名是否已被占用
+        User existing = userService.findByUsername(newUsername);
+        if (existing != null && !existing.getUserId().equals(userId)) {
+            response.put("code", 409);
+            response.put("message", "该用户名已被占用");
+            return ResponseEntity.status(409).body(response);
+        }
+
+        User user = userService.findByUserId(userId);
+        if (user == null) {
+            response.put("code", 404);
+            response.put("message", "用户不存在");
+            return ResponseEntity.status(404).body(response);
+        }
+
+        user.setUsername(newUsername);
+        userService.updateUser(user);
+
+        // 返回更新后的用户对象
+        response.put("code", 200);
+        response.put("message", "用户名修改成功");
+        response.put("data", user);
+        return ResponseEntity.ok(response);
+    }
 }

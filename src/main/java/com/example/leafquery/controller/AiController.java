@@ -22,16 +22,16 @@ public class AiController {
     }
 
     /**
-     * 根据病虫害名称获取 AI 详细分析。
+     * 根据用户首次输入内容获取 AI 植保问答回复。
      *
-     * @param pestName 病虫害名称
-     * @return AI 生成的 Markdown 分析文本
+     * @param pestName 用户首次输入的文本内容
+     * @return AI 生成的问答文本
      */
     @PostMapping("/analyze")
     public ResponseEntity<?> analyzePest(@RequestBody Map<String, String> body) {
         String pestName = body.get("pestName");
         if (pestName == null || pestName.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "请提供病虫害名称"));
+            return ResponseEntity.badRequest().body(Map.of("error", "请提供用户输入内容"));
         }
 
         String analysis = doubaoAiService.analyzePest(pestName);

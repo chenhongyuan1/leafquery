@@ -46,4 +46,16 @@ public class UserService {
         // 登录失败，账号或密码错误
         return null;
     }
+
+    public User findByUsername(String username) {
+        return userMapper.selectByUsername(username);
+    }
+
+    public User findByUserId(Long userId) {
+        return userMapper.selectByUserId(userId);
+    }
+
+    public void updateUser(User user) {
+        userMapper.updateUser(user);
+    }
 }

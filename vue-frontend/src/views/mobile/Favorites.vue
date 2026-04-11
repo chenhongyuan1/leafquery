@@ -1,15 +1,31 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useFavoritesStore } from '../../stores/favorites'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
+import { getStoredUser } from '../../utils/accountSecurity'
 
 const router = useRouter()
 const favStore = useFavoritesStore()
 
 const favoritesList = computed(() => favStore.favoriteItems)
 
+// 进入收藏页时刷新收藏数据
+onMounted(async () => {
+  const user = getStoredUser()
+  if (user?.userId) {
+    await favStore.loadFavorites(user.userId)
+  }
+})
+
 const goBack = () => {
   router.back()
+}
+
+// 点击收藏项查看详情 — 跳转到发现页
+const handleItemClick = (item) => {
+  const tabMap = { news: 0, library: 1, qna: 2 }
+  const tab = tabMap[item.itemType] ?? 0
+  router.push({ path: '/discovery', query: { tab: String(tab) } })
 }
 
 // 格式化时间显示
@@ -44,15 +60,9 @@ const getTagText = (type) => {
   }
 }
 
-const handleUnlike = (item) => {
-   // Item mapped to fit toggleFavorite required structure
-   favStore.toggleFavorite({
-      id: item.itemId,
-      type: item.itemType,
-      title: item.title,
-      image: item.imageUrl,
-      desc: item.description
-   })
+const handleUnlike = async (item) => {
+   // Use dedicated removeFavorite (always removes, no toggle ambiguity)
+   await favStore.removeFavorite(item)
 }
 
 </script>
@@ -75,14 +85,16 @@ const handleUnlike = (item) => {
         <div 
           v-for="item in favoritesList" 
           :key="item.id || (item.itemType + '_' + item.itemId)" 
-          class="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 p-4 flex gap-4 active:scale-[0.98] transition-all relative group"
+          class="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 p-4 flex gap-4 active:scale-[0.98] transition-all relative group cursor-pointer"
+          @click="handleItemClick(item)"
         >
-          <!-- 取消收藏按钮 -->
+          <!-- 取消收藏按钮 (star icon matching Discovery page) -->
           <button 
              @click.stop="handleUnlike(item)"
-             class="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-red-50 flex items-center justify-center active:scale-90 transition-transform"
+             :disabled="favStore.isFavoriteSubmitting"
+             class="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50 disabled:active:scale-100"
           >
-             <span class="text-xs text-red-500">❤️</span>
+             <span class="text-sm text-amber-500">⭐</span>
           </button>
 
           <!-- 缩略图 -->
@@ -144,8 +156,8 @@ const handleUnlike = (item) => {
   background-color: rgba(51, 65, 85, 0.82) !important;
 }
 
-:global(.dark) .favorites-page :deep([class~='bg-red-50']) {
-  background-color: rgba(239, 68, 68, 0.16) !important;
+:global(.dark) .favorites-page :deep([class~='bg-amber-50']) {
+  background-color: rgba(245, 158, 11, 0.16) !important;
 }
 
 :global(.dark) .favorites-page :deep([class~='border-slate-100']) {

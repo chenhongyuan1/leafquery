@@ -1,8 +1,16 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useSettingsStore } from '../../stores/settings'
+import { AUTH_CHANGE_EVENT, getStoredUser } from '../../utils/accountSecurity'
+import {
+  dismissPopupAnnouncement,
+  fetchAnnouncements,
+  getLocalAnnouncementReadIds,
+  getLocalDismissedPopupIds,
+  isAnnouncementRead
+} from '../../utils/announcementReadState'
 import {
   formatConfidencePercent,
   getPrimaryDisplayName,
@@ -15,12 +23,12 @@ import {
 const router = useRouter()
 const settingsStore = useSettingsStore()
 
-// ===== Category Selection (先选后扫) =====
+// ===== Category Selection =====
 const categoryOptions = [
   { key: 'rice',   label: '水稻', value: '水稻', icon: '🌾', group: 'disease' },
   { key: 'corn',   label: '玉米', value: '玉米', icon: '🌽', group: 'disease' },
-  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌿', group: 'disease' },
-  { key: 'other',  label: '其他', value: '其他', icon: '🍃', group: 'disease' },
+  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌾', group: 'disease' },
+  { key: 'other',  label: '其他', value: '其他', icon: '📋', group: 'disease' },
   { key: 'pest',   label: '虫害', value: '虫害', icon: '🐛', group: 'pest'    },
 ]
 const selectedCategories = ref([])
@@ -43,7 +51,7 @@ const confirmSelection = () => {
 // ===== Scan State =====
 const fileInput = ref(null)
 const previewUrl = ref(null)
-const analysisStage = ref('')  // '' → 'yolo' → 'review' → 'done'
+const analysisStage = ref('')  // '' -> 'yolo' -> 'review' -> 'done'
 const yoloUsed = ref(false)
 const reviewRequired = ref(false)
 
@@ -59,26 +67,26 @@ const selectedCropNames = ref([])
 const selectedTargetNames = ref([])
 
 
-// TTS 璇煶鎾斁鐘舵€?
+// TTS 语音播放状态
 const isSpeaking = ref(false)
 const isTtsLoading = ref(false)
 let currentAudio = null
 
 const speakLastReply = async () => {
-  // 濡傛灉姝ｅ湪鎾斁锛屽仠姝?
+  // 如果正在播放，停止
   if (isSpeaking.value) {
     stopSpeaking()
     return
   }
 
-  // 鍙栨渶鍚庝竴鏉?assistant 娑堟伅
+  // 取最后一条 assistant 消息
   const lastAssistant = [...messages.value].reverse().find(m => m.role === 'assistant')
   if (!lastAssistant || !lastAssistant.content) {
     showToast('没有可以朗读的内容', 'warning')
     return
   }
 
-  // 绉婚櫎 Markdown 鏍煎紡绗﹀彿锛屽彧淇濈暀绾枃鏈?
+  // 移除 Markdown 格式符号，只保留纯文本
   const plainText = lastAssistant.content
     .replace(/[#*_`~>\-|]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -96,12 +104,12 @@ const speakLastReply = async () => {
     currentAudio = new Audio(url)
     currentAudio.onplay = () => { isSpeaking.value = true; isTtsLoading.value = false }
     currentAudio.onended = () => { stopSpeaking() }
-    currentAudio.onerror = () => { stopSpeaking(); showToast('闊抽鎾斁澶辫触', 'error') }
+    currentAudio.onerror = () => { stopSpeaking(); showToast('语音播放失败', 'error') }
     currentAudio.play()
   } catch (err) {
     console.error('TTS failed:', err)
     isTtsLoading.value = false
-    showToast('璇煶鍚堟垚澶辫触锛岃绋嶅悗鍐嶈瘯', 'error')
+    showToast('语音合成失败，请稍后重试', 'error')
   }
 }
 
@@ -165,11 +173,11 @@ const removePendingGeneralImage = () => {
   pendingGeneralImage.value = ''
 }
 
-// 璇煶杞枃瀛?+ 鏂硅█璇嗗埆 (Web Audio API PCM 閲囬泦 + WAV 缂栫爜 鈫?鍚庣璞嗗寘 SeedASR)
+// 语音转文字 + 方言识别 (Web Audio API PCM 采集 + WAV 编码 -> 后端豆包  SeedASR)
 const isRecording = ref(false)
 const isAudioProcessing = ref(false)
 
-// Toast 寮圭獥閫氱煡绯荤粺
+// Toast 弹窗通知系统
 const toastMessage = ref('')
 const toastType = ref('info') // 'info' | 'error' | 'warning'
 const toastVisible = ref(false)
@@ -192,16 +200,16 @@ let analyserNode = null
 let animationFrameId = null
 let orbCanvas = null
 let orbCtx = null
-let orbDepth = 0.3 // CodePen 榛樿鍊?
+let orbDepth = 0.3 // CodePen 默认值
 let smoothedDepth = 0.3
 let prevEnergy = 0
 let smoothedEnergy = 0
-let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // sin 娉㈢浉浣?
+let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // sin 波相位
 let stream = null
 let pcmBuffers = []
 
-// ============ Organic AI Orb Canvas Renderer (蹇犲疄澶嶅埢 CodePen 鏁板鍏紡) ============
-// CodePen 鍘熺増鐨?7 涓帶鍒剁偣鐩镐綅鍋忕Щ
+// ============ Organic AI Orb Canvas Renderer (忠实复刻  CodePen 数学公式 ============
+// CodePen 原版的 7 个控制点相位偏移
 const BLOB_POINTS = [
   { angle: 0, p1: 0, p2: 0, p3: 0 },
   { angle: 51.43, p1: 137.5, p2: 222.5, p3: 360.1 },
@@ -213,7 +221,7 @@ const BLOB_POINTS = [
 ]
 const DEG = Math.PI / 180
 
-// 鏋勫缓璐濆灏旇矾寰勭殑杈呭姪鍑芥暟 (澶嶇敤)
+// 构建贝塞尔路径的辅助函数 (复用
 function buildBlobPath(ctx, cx, cy, baseR, depth, phases) {
   const pts = BLOB_POINTS.map(pt => {
     const rand = 0.5 + 0.5 * (
@@ -239,15 +247,15 @@ function buildBlobPath(ctx, cx, cy, baseR, depth, phases) {
 
 function drawOrb(ctx, w, h, depth, phases) {
   const cx = w / 2, cy = h / 2
-  // CodePen 鍘熺増: transform: scale(calc(1 + var(--depth)))
-  // depth 瓒婂ぇ 鈫?鏁翠綋瓒婂ぇ + 褰㈠彉瓒婂墽鐑?(鍚戝鑶ㄨ儉 + 涓嶈鍒欓渿鍔?
+  // CodePen 原版: transform: scale(calc(1 + var(--depth)))
+  // depth 越大 -> 整体越大  + 形变越剧烈 (向外膨胀  + 不规则震动
   const scaleFactor = 0.5 + depth * 0.5
   const baseR = Math.min(w, h) / 2 * 0.85 * scaleFactor
 
   ctx.clearRect(0, 0, w, h)
 
-  // ======== 绗?1 灞? 澶栧彂鍏?Glow (feGaussianBlur 妯℃嫙) ========
-  // 鍏堢敾涓€娆″甫澶фā绯婇槾褰辩殑濉厖锛岀劧鍚庢竻闄ゅ疄浣撳彧淇濈暀鍏夋檿
+  // ======== 第 1 层  外发光 Glow (feGaussianBlur 模拟 ========
+  // 先画一次带大模糊阴影的填充，然后清除实体只保留光晕
   ctx.save()
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
   ctx.shadowColor = 'hsla(200, 90%, 70%, 0.6)'
@@ -258,34 +266,34 @@ function drawOrb(ctx, w, h, depth, phases) {
   ctx.fill()
   ctx.restore()
 
-  // ======== 绗?2 灞? 涓讳綋濉厖 (Mesh Gradient) ========
+  // ======== 第 2 层  主体填充 (Mesh Gradient) ========
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
 
-  // 缃戞牸娓愬彉濉厖 (缁胯壊妞嶇墿涓婚閰嶈壊)
+  // 网格渐变填充 (绿色植物主题配色)
   const g1 = ctx.createRadialGradient(cx * 1.4, cy * 0.5, 0, cx, cy, baseR * 1.2)
-  g1.addColorStop(0, 'hsla(160, 90%, 75%, 1)')  // 浜杽鑽风豢
+  g1.addColorStop(0, 'hsla(160, 90%, 75%, 1)')  // 亮薄荷绿
   g1.addColorStop(1, 'hsla(160, 80%, 60%, 0)')
   
   const g2 = ctx.createRadialGradient(cx * 0.4, cy * 1.5, 0, cx, cy, baseR * 1.1)
-  g2.addColorStop(0, 'hsla(140, 70%, 55%, 0.8)')  // 缈犵豢
+  g2.addColorStop(0, 'hsla(140, 70%, 55%, 0.8)')  // 翠绿
   g2.addColorStop(1, 'hsla(140, 70%, 55%, 0)')
 
   const g3 = ctx.createRadialGradient(cx * 0.6, cy * 0.3, 0, cx, cy, baseR)
-  g3.addColorStop(0, 'hsla(180, 65%, 60%, 1)')  // 闈掔豢
+  g3.addColorStop(0, 'hsla(180, 65%, 60%, 1)')  // 青绿
   g3.addColorStop(1, 'hsla(150, 62%, 50%, 0)')
 
-  // 搴曡壊
+  // 底色
   ctx.fillStyle = 'hsla(150, 62%, 73%, 1)'
   ctx.fill()
-  // 鍙犲姞娓愬彉
+  // 叠加渐变
   ctx.save()
   ctx.clip()
   ctx.fillStyle = g1; ctx.fill()
   ctx.fillStyle = g2; ctx.fill()
   ctx.fillStyle = g3; ctx.fill()
 
-  // ======== 绗?3 灞? 鍣偣璐ㄦ劅 Film Grain (feTurbulence 妯℃嫙) ========
-  // 浣跨敤 offscreen canvas 鐢熸垚鍣偣锛屽啀閫氳繃 drawImage 鍙犲姞锛坉rawImage 灏婇噸 clip锛?
+  // ======== 第 3 层  噪点质感  Film Grain (feTurbulence 模拟 ========
+  // 使用 offscreen canvas 生成噪点，再通过 drawImage 叠加（drawImage 尊重 clip）
   if (!drawOrb._grainCanvas) {
     drawOrb._grainCanvas = document.createElement('canvas')
     drawOrb._grainCanvas.width = w
@@ -300,7 +308,7 @@ function drawOrb(ctx, w, h, depth, phases) {
   }
   gc.putImageData(gImg, 0, 0)
   
-  // 鍦ㄥ凡瑁佸壀鐨勪富 canvas 涓婄敤 overlay 娣峰悎妯″紡缁樺埗鍣偣
+  // 在已裁剪的主 canvas 上用 overlay 混合模式绘制噪点
   ctx.globalCompositeOperation = 'overlay'
   ctx.drawImage(drawOrb._grainCanvas, 0, 0)
 
@@ -310,13 +318,13 @@ function drawOrb(ctx, w, h, depth, phases) {
 function startOrbAnimation(dataArray) {
   const render = () => {
     if (!stream) return
-    // 鏇存柊鐩镐綅 (涓?CodePen 涓€鑷寸殑閫熺巼: 7s, 11s, 13s 鍛ㄦ湡)
+    // 更新相位 (与 CodePen 一致的速率: 7s, 11s, 13s 周期
     orbPhases.s1 += (2 * Math.PI) / (7 * 60)
     orbPhases.s2 += (2 * Math.PI) / (11 * 60)
     orbPhases.s3 += (2 * Math.PI) / (13 * 60)
     orbPhases.rotation += (2 * Math.PI) / (20 * 60)
 
-    // 闊抽鍒嗘瀽 (涓?CodePen JS 瀹屽叏涓€鑷寸殑 RMS 鑳介噺妫€娴?
+    // 音频分析(与 CodePen JS 完全一致的  RMS 能量检测
     if (analyserNode) {
       analyserNode.getByteTimeDomainData(dataArray)
       let sumSq = 0
@@ -346,7 +354,7 @@ function startOrbAnimation(dataArray) {
   render()
 }
 
-// 灏?Float32 PCM 鏍锋湰缂栫爜涓烘爣鍑?WAV 鏂囦欢
+// 层 Float32 PCM 样本编码为标准 WAV 文件
 const encodeWAV = (samples, sampleRate) => {
   const buffer = new ArrayBuffer(44 + samples.length * 2)
   const view = new DataView(buffer)
@@ -364,7 +372,7 @@ const encodeWAV = (samples, sampleRate) => {
   view.setUint16(34, 16, true)       // bits per sample
   writeStr(36, 'data')
   view.setUint32(40, samples.length * 2, true)
-  // 鍐欏叆 16-bit PCM 鏍锋湰
+  // 写入 16-bit PCM 样本
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]))
     view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
@@ -372,7 +380,7 @@ const encodeWAV = (samples, sampleRate) => {
   return new Blob([buffer], { type: 'audio/wav' })
 }
 
-// 灏?48kHz 涓嬮噰鏍峰埌 16kHz
+// 层 48kHz 下采样到  16kHz
 const downsample = (buffer, fromRate, toRate) => {
   if (fromRate === toRate) return buffer
   const ratio = fromRate / toRate
@@ -395,7 +403,7 @@ const startRecording = async (target) => {
     // Web Audio Analyzer for Organic Orb Reactivity
     analyserNode = audioContext.createAnalyser()
     analyserNode.fftSize = 256
-    // 鎴戜滑涓昏鍏虫敞浜哄０棰戠巼锛岃缃钩婊戝害璁╃嚎鏉℃洿灏戞姈鍔?
+    // 我们主要关注人声频率，设置平滑度让线条更少抖动
     analyserNode.smoothingTimeConstant = 0.8
     sourceNode.connect(analyserNode)
     
@@ -405,7 +413,7 @@ const startRecording = async (target) => {
     prevEnergy = 0
     smoothedEnergy = 0
     
-    // 绛夊緟 Vue DOM 鏇存柊鍚庤幏鍙?Canvas
+    // 等待 Vue DOM 更新后获取 Canvas
     setTimeout(() => {
       orbCanvas = document.getElementById('orb-canvas')
       if (orbCanvas) {
@@ -444,21 +452,21 @@ const stopRecording = async () => {
   if (sourceNode) { sourceNode.disconnect(); sourceNode = null }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
 
-  // 鍚堝苟鎵€鏈?PCM buffer
+  // 合并所有 PCM buffer
   const totalLength = pcmBuffers.reduce((acc, b) => acc + b.length, 0)
   const merged = new Float32Array(totalLength)
   let offset = 0
   for (const buf of pcmBuffers) { merged.set(buf, offset); offset += buf.length }
   pcmBuffers = []
 
-  // 涓嬮噰鏍峰埌 16kHz 骞剁紪鐮佷负 WAV
+  // 下采样到  16kHz 并编码为  WAV
   const actualRate = audioContext ? audioContext.sampleRate : 16000
   const samples16k = downsample(merged, actualRate, 16000)
   if (audioContext) { audioContext.close(); audioContext = null }
 
   const wavBlob = encodeWAV(samples16k, 16000)
   
-  // 鍙戦€佸埌鍚庣
+  // 发送到后端
   isAudioProcessing.value = true
   const formData = new FormData()
   formData.append('audio', wavBlob, 'recording.wav')
@@ -469,12 +477,12 @@ const stopRecording = async () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     const text = response.data.text || ''
-    // 鍚庣灏嗘墍鏈夐敊璇?鐘舵€佹秷鎭兘浣滀负 text 杩斿洖锛岄渶瑕佽繃婊?
+    // 后端会把错误/状态消息也放进 text 返回，这里先过滤掉这些提示前缀
     const backendErrorPrefixes = [
-      '璇峰湪 application',
-      '璇煶鏈瘑鍒埌鏈夋晥鍐呭',
-      '璇煶璇嗗埆瓒呮椂',
-      '璇煶璇嗗埆澶辫触',
+      'application',
+      '语音识别失败',
+      '语音识别服务',
+      '文件上传失败'
     ]
     const isBackendError = backendErrorPrefixes.some(prefix => text.startsWith(prefix))
     
@@ -485,12 +493,16 @@ const stopRecording = async () => {
         userInput.value = (userInput.value + ' ' + text).trim()
       }
     } else {
-      // 鎵€鏈夊悗绔敊璇?绌虹粨鏋滅粺涓€璧?Toast
-      showToast(isBackendError ? text : '璇煶鏈瘑鍒埌鏈夋晥鍐呭锛岃閲嶈瘯', isBackendError && text.includes('澶辫触') ? 'error' : 'warning', 4000)
+      // 所有后端错误/空结果统一走 Toast
+      showToast(
+        isBackendError ? text : '语音识别失败，请稍后重试',
+        isBackendError && text.includes('失败') ? 'error' : 'warning',
+        4000
+      )
     }
   } catch (err) {
     console.error("Speech to text translation failed:", err)
-    showToast('璇煶璇嗗埆澶辫触锛岃閲嶈瘯', 'error')
+    showToast('语音识别失败，请稍后重试', 'error')
   } finally {
     isAudioProcessing.value = false
   }
@@ -505,7 +517,7 @@ const handleVoiceStop = () => {
   if (isRecording.value) stopRecording()
 }
 
-// 鐐瑰嚮鍒囨崲褰曢煶锛堝璇濋〉楹﹀厠椋庢寜閽娇鐢級
+// 点击切换录音（对话页麦克风按钮使用）
 const toggleVoiceInput = (target) => {
   if (isRecording.value === target) {
     stopRecording()
@@ -535,68 +547,85 @@ const sceneBadgeClassMap = {
   empty: 'bg-slate-100 text-slate-600'
 }
 
-// 璇嗗埆鍘嗗彶璁板綍
+// 识别历史记录
 const historyItems = ref(JSON.parse(localStorage.getItem('leafquery_history') || '[]'))
+
+const refreshNotificationBadge = async () => {
+  try {
+    const announcements = await fetchAnnouncements('/api/discovery/announcements')
+    const localReadIds = getLocalAnnouncementReadIds()
+    hasNewNotification.value = announcements.some(item => !isAnnouncementRead(item, localReadIds))
+  } catch (error) {
+    console.error('Failed to refresh announcement badge state', error)
+    hasNewNotification.value = false
+  }
+}
+
+const refreshPopupAnnouncement = async () => {
+  try {
+    const popupAnnouncements = await fetchAnnouncements('/api/discovery/announcements/popup')
+    const currentUser = getStoredUser()
+    if (currentUser?.userId) {
+      popupAnnouncement.value = popupAnnouncements.find(item => !Boolean(item.read)) || null
+      return
+    }
+
+    const dismissedIds = getLocalDismissedPopupIds()
+    popupAnnouncement.value = popupAnnouncements.find(item => !dismissedIds.includes(Number(item.id))) || null
+  } catch (error) {
+    console.error('Failed to refresh popup announcement state', error)
+    popupAnnouncement.value = null
+  }
+}
+
+const refreshAnnouncementState = async () => {
+  await refreshNotificationBadge()
+  await refreshPopupAnnouncement()
+}
 
 onMounted(async () => {
   try {
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      if (user && user.userId) {
-        const response = await axios.get(`/api/record/list?userId=${user.userId}`)
-        if (response.data && response.data.code === 200) {
-          historyItems.value = response.data.data.map(item => ({
-            id: item.id,
-            name: item.pestName,
-            confidence: item.confidence,
-            time: item.createTime,
-            imageUrl: item.imageUrl
-          }))
-        }
+    const user = getStoredUser()
+    if (user?.userId) {
+      const response = await axios.get(`/api/record/list?userId=${user.userId}`)
+      if (response.data && response.data.code === 200) {
+        historyItems.value = response.data.data.map(item => ({
+          id: item.id,
+          name: item.pestName,
+          confidence: item.confidence,
+          time: item.createTime,
+          imageUrl: item.imageUrl
+        }))
       }
     }
   } catch (e) {
     console.error('Failed to sync history from cloud', e)
   }
 
-  // 妫€鏌ユ槸鍚︽湁鏈閫氱煡 鈫?鏄剧ず绾㈢偣
-  try {
-    const { data } = await axios.get('/api/discovery/announcements')
-    if (data.code === 200 && data.data.length > 0) {
-      const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]')
-      const hasUnread = data.data.some(a => !readIds.includes(a.id))
-      hasNewNotification.value = hasUnread
-    }
-  } catch (e) {
-    // 闈欓粯澶辫触锛屼笉褰卞搷涓诲姛鑳?
-  }
-
-  // 妫€鏌ユ槸鍚︽湁寮圭獥鍏憡
-  try {
-    const { data: popupData } = await axios.get('/api/discovery/announcements/popup')
-    if (popupData.code === 200 && popupData.data.length > 0) {
-      const dismissedIds = JSON.parse(localStorage.getItem('dismissed_popups') || '[]')
-      const unDismissed = popupData.data.find(a => !dismissedIds.includes(a.id))
-      if (unDismissed) {
-        popupAnnouncement.value = unDismissed
-      }
-    }
-  } catch (e) {
-    // 闈欓粯澶辫触
-  }
+  await refreshAnnouncementState()
+  window.addEventListener(AUTH_CHANGE_EVENT, refreshAnnouncementState)
 })
 
-function dismissPopup() {
-  if (popupAnnouncement.value) {
-    const dismissedIds = JSON.parse(localStorage.getItem('dismissed_popups') || '[]')
-    dismissedIds.push(popupAnnouncement.value.id)
-    localStorage.setItem('dismissed_popups', JSON.stringify(dismissedIds))
+onUnmounted(() => {
+  window.removeEventListener(AUTH_CHANGE_EVENT, refreshAnnouncementState)
+})
+
+async function dismissPopup() {
+  if (!popupAnnouncement.value) {
+    return
+  }
+
+  try {
+    await dismissPopupAnnouncement(popupAnnouncement.value.id)
+  } catch (error) {
+    console.error('Failed to dismiss popup announcement', error)
+  } finally {
     popupAnnouncement.value = null
+    await refreshNotificationBadge()
   }
 }
 
-// 缃俊搴︾櫨鍒嗘瘮鏄剧ず
+// 置信度百分比显示
 const confidencePercent = computed(() => {
   return (detectionResult.value.confidence * 100).toFixed(1)
 })
@@ -658,7 +687,7 @@ const persistFinalizedDetection = async result => {
   }
 }
 
-// ===== 先选后扫 — 拍照/上传触发一步到位识别 =====
+// ===== 先选后扫：拍照/上传后直接进入识别 =====
 const triggerScan = () => {
   if (!hasSelection.value) {
     showToast('请先选择至少一个检测类别', 'warning')
@@ -675,9 +704,19 @@ const onScanFileSelected = async (event) => {
   previewUrl.value = URL.createObjectURL(file)
   isAnalyzing.value = true
   analysisStage.value = 'yolo'
-  isResultReady.value = true
+  isResultReady.value = false
   showDetail.value = false
   messages.value = []
+
+  // 记录分析开始时间，确保动画至少播放一段时间
+  const analysisStartTime = Date.now()
+  const MIN_ANIMATION_DURATION = 1800 // 最少展示 1.8 秒动画
+
+  let yoloTimer = setTimeout(() => {
+    if (isAnalyzing.value && analysisStage.value === 'yolo') {
+      analysisStage.value = 'review'
+    }
+  }, 1500)
 
   try {
     const formData = new FormData()
@@ -703,6 +742,13 @@ const onScanFileSelected = async (event) => {
       finalPestName = '未能识别出具体病虫害'
     }
 
+    if (reviewResult && reviewResult.includes('【确诊结果】')) {
+      const match = reviewResult.match(/【确诊结果】[：:]?\s*([^\n]+)/);
+      if (match && match[1]) {
+        finalPestName = match[1].replace(/\*/g, '').trim();
+      }
+    }
+
     detectionResult.value = {
       pestName: finalPestName,
       confidence: predictionRaw.confidence || predictionRaw.primary_confidence || 0,
@@ -718,19 +764,40 @@ const onScanFileSelected = async (event) => {
       userCategories: selectedCategories.value.join(',')
     }
 
-    // 动画阶段推进
-    if (reviewRequired.value) {
-      analysisStage.value = 'review'
-      await new Promise(r => setTimeout(r, 800))
+    clearTimeout(yoloTimer)
+
+    const elapsed = Date.now() - analysisStartTime
+    
+    // 保证 YOLO 至少闪 800 毫秒才进下一步，防止突兀
+    if (elapsed < 800) {
+      await new Promise(r => setTimeout(r, 800 - elapsed))
     }
+
+    if (reviewRequired.value) {
+      if (analysisStage.value !== 'review') {
+        analysisStage.value = 'review'
+      }
+      // AI复核保底思考时间（1500毫秒），让业务体感真实，绝不比YOLO短
+      await new Promise(r => setTimeout(r, 1500))
+    } else {
+      const nowElapsed = Date.now() - analysisStartTime
+      if (nowElapsed < MIN_ANIMATION_DURATION) {
+        await new Promise(r => setTimeout(r, MIN_ANIMATION_DURATION - nowElapsed))
+      }
+    }
+
+    // 展示"分析完成"✅ 动画，停留一段时间让用户看到
     analysisStage.value = 'done'
+    await new Promise(r => setTimeout(r, 1000))
 
     // 复核失败提示
     if (reportError) {
       showToast('YOLO 识别完成，但 AI 复核失败', 'warning', 5000)
     }
 
-    // 不自动生成报告，展示结果摘要
+    // 关闭分析动画，展示结果摘要
+    isAnalyzing.value = false
+    analysisStage.value = ''
     messages.value = []
     isResultReady.value = true
     showDetail.value = false
@@ -741,7 +808,6 @@ const onScanFileSelected = async (event) => {
     console.error('Identification failed', err)
     showToast(err.response?.data?.error || '识别失败，请检查网络或服务配置', 'error')
     isResultReady.value = false
-  } finally {
     isAnalyzing.value = false
     analysisStage.value = ''
   }
@@ -749,9 +815,28 @@ const onScanFileSelected = async (event) => {
 
 // ====== 阶段 3：按需生成诊断报告 ======
 const isGeneratingReport = ref(false)
+const reportLoadingSteps = [
+  '检查本地气象数据...',
+  '索引病虫害知识库...',
+  '参考初筛与复核结果...',
+  '构建多维度推理中...',
+  'AI 诊断报告生成中...'
+]
+const reportLoadingText = ref(reportLoadingSteps[0])
+let reportLoadingInterval = null
+
 const generateReport = async () => {
   if (isGeneratingReport.value) return
   isGeneratingReport.value = true
+
+  let stepIndex = 0
+  reportLoadingText.value = reportLoadingSteps[0]
+  reportLoadingInterval = setInterval(() => {
+    stepIndex++
+    if (stepIndex < reportLoadingSteps.length) {
+      reportLoadingText.value = reportLoadingSteps[stepIndex]
+    }
+  }, 3500)
 
   try {
     const params = new URLSearchParams()
@@ -780,6 +865,7 @@ const generateReport = async () => {
     showToast('诊断报告生成失败：' + (err.response?.data?.error || '请检查网络'), 'error')
   } finally {
     isGeneratingReport.value = false
+    if (reportLoadingInterval) clearInterval(reportLoadingInterval)
   }
 }
 
@@ -797,7 +883,7 @@ const sendMessage = async () => {
   const text = userInput.value.trim()
   userInput.value = ''
   
-  // 娣诲姞鐢ㄦ埛娑堟伅
+  // 添加用户消息
   messages.value.push({ role: 'user', content: text, imageBase64: pendingImage.value })
   scrollToBottom()
   
@@ -819,7 +905,7 @@ const sendMessage = async () => {
   }
 }
 
-// 寮€鍚€氱敤鍜ㄨ瀵硅瘽
+// 开启通用咨询对话
 const startGeneralChat = () => {
   if (!(generalUserInput.value.trim() || pendingGeneralImage.value) || isSending.value) return
   
@@ -841,7 +927,7 @@ const startGeneralChat = () => {
   sendMessage()
 }
 
-// 鑷姩婊氬姩鍒板簳閮?
+// 自动滚动到底部
 const scrollToBottom = () => {
   setTimeout(() => {
     if (chatContainer.value) {
@@ -850,7 +936,7 @@ const scrollToBottom = () => {
   }, 100)
 }
 
-// 绠€鍗曠殑 Markdown 娓叉煋锛堢矖鐣ュ鐞?headers 鍜?lists锛?
+// 简单的 Markdown 渲染（粗略处理标题和列表）
 const renderMarkdown = (text) => {
   if (!text) return ''
   let html = text
@@ -862,35 +948,46 @@ const renderMarkdown = (text) => {
   return html
 }
 
-// 鍘嗗彶鏉＄洰鐨?emoji 鍥炬爣
+// 历史条目的 emoji  图标
 const getEmoji = name => {
-  if (name === 'unknown' || name === '未识别' || name === '未能识别出具体病虫害') return '!'
-  return '叶'
+  if (!name) return '📌'
+  if (name.includes('健康')) return '🌿'
+  if (name.includes('虫')) return '🐛'
+  if (name.includes('病')) return '🦠'
+  return '📌'
 }
 
-// 鏍煎紡鍖栧巻鍙叉椂闂?
 const formatTime = (item) => {
-  const timestamp = item.time
-  if (!timestamp || isNaN(Number(timestamp))) return item.time || '鍒氬垰'
-  
-  const date = new Date(Number(timestamp))
+  const timestamp = item.time || item.createTime
+  if (!timestamp) return '未知时间'
+
+  let date
+  if (typeof timestamp === 'number' || (typeof timestamp === 'string' && /^\d+$/.test(timestamp))) {
+    date = new Date(Number(timestamp))
+  } else {
+    date = new Date(timestamp)
+  }
+
+  if (isNaN(date.getTime())) return timestamp
+
   const now = new Date()
   const diff = now - date
-  
+
   if (date.toDateString() === now.toDateString()) {
     if (diff < 60000) return '刚刚'
     if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
     return `${Math.floor(diff / 3600000)}小时前`
   }
-  
+
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   if (date.toDateString() === yesterday.toDateString()) {
     return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
   }
-  
+
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
+
 </script>
 
 <template>
@@ -912,7 +1009,7 @@ const formatTime = (item) => {
                'bg-amber-50/90 border-amber-200 text-amber-700': toastType === 'warning',
                'bg-blue-50/90 border-blue-200 text-blue-700': toastType === 'info'
              }">
-          <span class="text-lg shrink-0">{{ toastType === 'error' ? '❌' : toastType === 'warning' ? '⚠️' : 'ℹ️' }}</span>
+          <span class="text-lg shrink-0">{{ toastType === 'error' ? '✖' : toastType === 'warning' ? '⚠️' : 'ℹ️' }}</span>
           <span class="text-sm font-medium">{{ toastMessage }}</span>
           <button @click="toastVisible = false" class="ml-2 shrink-0 opacity-50 hover:opacity-100 text-lg leading-none">&times;</button>
         </div>
@@ -984,7 +1081,7 @@ const formatTime = (item) => {
                 <div class="absolute inset-0 border-4 border-emerald-200 rounded-full"></div>
                 <div class="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
               </div>
-              <span class="text-base font-black text-emerald-300">🔬 YOLO 模型检测中...</span>
+              <span class="text-base font-black text-emerald-300">YOLO 快速检测中...</span>
               <span class="text-xs text-white/60 mt-1">正在扫描图像中的病虫害特征</span>
             </div>
             <div v-else-if="analysisStage === 'review'" class="flex flex-col items-center animate-fadeIn">
@@ -992,12 +1089,15 @@ const formatTime = (item) => {
                 <div class="absolute inset-0 border-4 border-amber-200 rounded-full"></div>
                 <div class="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin" style="animation-duration: 1.5s"></div>
               </div>
-              <span class="text-base font-black text-amber-300">🧠 AI 视觉复核中...</span>
+              <span class="text-base font-black text-amber-300">AI 视觉复核中...</span>
               <span class="text-xs text-white/60 mt-1">大模型正在对图像进行深度分析</span>
             </div>
             <div v-else class="flex flex-col items-center animate-fadeIn">
-              <div class="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-3"><span class="text-3xl">✅</span></div>
-              <span class="text-base font-black text-emerald-300">分析完成</span>
+              <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 animate-scaleIn">
+                <span class="text-4xl">✓</span>
+              </div>
+              <span class="text-lg font-black text-emerald-300 mb-1">分析完成</span>
+              <span class="text-sm text-white/80 font-medium">{{ primaryDisplayName || '处理完毕' }}</span>
             </div>
           </div>
         </div>
@@ -1090,7 +1190,7 @@ const formatTime = (item) => {
                class="w-full py-3.5 rounded-[14px] font-bold text-[15px] transition-all duration-300 flex items-center justify-center gap-2"
                :class="hasSelection ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 active:scale-[0.98]' : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
              >
-               <span>下一步：拍照/上传图片</span>
+               <span>下一步：拍照或上传图片</span>
                <svg v-if="hasSelection" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                </svg>
@@ -1108,7 +1208,7 @@ const formatTime = (item) => {
       </div>
       <div class="flex space-x-4 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-hide">
         <div v-if="historyItems.length === 0" v-for="i in 3" :key="'placeholder-' + i" class="flex-shrink-0 w-24 h-28 bg-white rounded-2xl p-3 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center space-y-2">
-          <div class="w-10 h-10 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center text-lg">📷</div>
+          <div class="w-10 h-10 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center text-lg">📲</div>
           <div class="text-center">
              <span class="block text-xs font-bold text-slate-300">待识别</span>
              <span class="block text-[10px] text-slate-300 font-medium mt-1">--</span>
@@ -1121,7 +1221,7 @@ const formatTime = (item) => {
         >
           <div class="w-10 h-10 bg-green-50 text-green-500 rounded-full flex items-center justify-center text-lg overflow-hidden shrink-0">
             <img v-if="item.imageUrl && item.imageUrl.trim() !== ''" :src="item.imageUrl" class="w-full h-full object-cover" @error="$event.target.style.display='none'" />
-            <span v-show="!item.imageUrl || item.imageUrl.trim() === ''">🌿</span>
+            <span v-show="!item.imageUrl || item.imageUrl.trim() === ''">🌾</span>
           </div>
           <div class="text-center w-full">
              <span class="block text-xs font-bold text-slate-800 truncate w-full">{{ item.name }}</span>
@@ -1202,13 +1302,13 @@ const formatTime = (item) => {
           <div v-if="isResultReady" class="relative z-10 bg-white w-full rounded-t-[2.5rem] px-8 pt-8 pb-24 h-[75%] sm:h-[80%] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col" @click.stop>
             <div class="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mb-8 shrink-0"></div>
 
-            <!-- Summary View (before "查看报告") -->
+            <!-- 摘要视图（点击“查看报告”前） -->
             <div v-if="!showDetail" class="flex-1 flex flex-col min-h-0">
               <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-2">
                 <div class="text-center mb-2">
                   <div class="w-20 h-20 rounded-full mx-auto flex items-center justify-center text-4xl mb-4 border-4 border-white shadow-xl" :class="[confidenceColor.icon]">
                     <img v-if="detectionResult.imageUrl" :src="detectionResult.imageUrl" class="w-full h-full object-cover rounded-full" />
-                    <span v-else>🌿</span>
+                    <span v-else>🌾</span>
                   </div>
                   <h2 class="text-2xl font-bold text-slate-900 mb-1">识别完成</h2>
                   <p class="text-slate-500 font-medium mb-4">
@@ -1216,9 +1316,9 @@ const formatTime = (item) => {
                   </p>
                   <div class="flex flex-wrap items-center justify-center gap-2 mb-4">
                     <span class="rounded-full px-3 py-1 text-xs font-bold" :class="sceneBadgeClasses">{{ sceneMeta.label }}</span>
-                    <span v-if="yoloUsed" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">🔬 YOLO</span>
-                    <span v-if="reviewRequired && detectionResult?.reviewResult" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">🧠 已复核</span>
-                    <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">⏳ 待复核</span>
+                    <span v-if="yoloUsed" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">YOLO</span>
+                    <span v-if="reviewRequired && detectionResult?.reviewResult" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">已复核</span>
+                    <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">待复核</span>
                     <span v-else-if="!reviewRequired && yoloUsed" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">无需复核</span>
                   </div>
                 </div>
@@ -1258,15 +1358,15 @@ const formatTime = (item) => {
                 <!-- 复核结论卡片（阶段 2 结果） -->
                 <div v-if="detectionResult?.reviewResult" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
                   <div class="flex items-center gap-2 mb-2">
-                    <span class="text-base">🧠</span>
-                    <span class="text-sm font-bold text-emerald-800">AI 视觉复核结论</span>
+                    <span class="text-base">🔍</span>
+                    <span class="text-sm font-bold text-emerald-800">AI 视觉复核结果</span>
                   </div>
                   <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
                 </div>
 
                 <!-- 待复核提示（Dify 复核失败时） -->
                 <div v-else-if="reviewRequired" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-center gap-2">
-                  <span class="text-base">⏳</span>
+                  <span class="text-base">⚠</span>
                   <span class="text-xs font-bold text-amber-700">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
                 </div>
               </div>
@@ -1283,11 +1383,11 @@ const formatTime = (item) => {
                     : 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'"
                 >
                   <template v-if="isGeneratingReport">
-                    <svg class="animate-spin w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                    <span>AI 诊断报告生成中...</span>
+                    <svg class="animate-spin w-5 h-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    <span class="animate-pulse truncate">{{ reportLoadingText }}</span>
                   </template>
                   <template v-else>
-                    <span>📋</span>
+                    <span>📝</span>
                     <span>生成 AI 诊断建议</span>
                     <span v-if="reviewRequired" class="text-xs opacity-80 ml-1">(推荐)</span>
                   </template>
@@ -1451,6 +1551,9 @@ const formatTime = (item) => {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
 
+@keyframes scaleIn { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.animate-scaleIn { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+
 @keyframes tap { 0% { transform: scale(1) translateY(0); } 10% { transform: scale(0.9) translateY(4px); } 20% { transform: scale(1) translateY(0); } 100% { transform: scale(1) translateY(0); } }
 .animate-tap { animation: tap 2s ease-in-out infinite; }
 
@@ -1466,3 +1569,4 @@ const formatTime = (item) => {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>
+

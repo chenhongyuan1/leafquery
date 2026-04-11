@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
+
 
 import java.io.IOException;
 import java.util.Collections;
@@ -85,17 +85,7 @@ public class DifyService {
 
     // ========== 文件上传 ==========
 
-    private String uploadFileToDify(MultipartFile file) {
-        try {
-            return uploadBytesToDify(
-                    file.getBytes(),
-                    file.getOriginalFilename() != null ? file.getOriginalFilename() : "image.jpg"
-            );
-        } catch (IOException e) {
-            log.error("Failed to read multipart file for Dify upload", e);
-            throw new RuntimeException("读取图片文件失败", e);
-        }
-    }
+
 
     private String uploadBytesToDify(byte[] fileBytes, String filename) {
         String uploadEndpoint = apiUrl + "/files/upload";
@@ -151,7 +141,7 @@ public class DifyService {
         // 8 个 Dify 变量
         Map<String, Object> inputs = new LinkedHashMap<>();
         inputs.put("phase",              safeText(phase));
-        inputs.put("review_required",    reviewRequired);
+        inputs.put("review_required",    String.valueOf(reviewRequired));
         inputs.put("location_id",        safeText(locationId));
         inputs.put("user_categories",    String.join("、", safeCategories));
         inputs.put("category_scope",     yoloUsed ? "yolo_supported" : "vision_only");
@@ -201,6 +191,12 @@ public class DifyService {
             
             // Workflow 接口的返回结构为 data.outputs.answer
             String answer = root.path("data").path("outputs").path("answer").asText();
+            
+            // 核心级拦截：剥离具有思维链 (CoT) 大模型的 <think>...</think> 推理过程
+            if (answer != null) {
+                answer = answer.replaceAll("(?s)<think>.*?</think>\\s*", "").trim();
+            }
+            
             log.info("Dify Chatflow [phase={}] finished successfully.", phase);
             return answer;
         } catch (Exception e) {

@@ -3,7 +3,11 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSettingsStore } from '../../stores/settings'
 import { useFarmStore } from '../../stores/farmCloud'
-import { useFavoritesStore } from '../../stores/favorites'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
+import {
+  applyThemePreference,
+  syncThemePreference
+} from '../../utils/themePreference'
 import {
   changePassword,
   clearUserSession,
@@ -19,8 +23,7 @@ const favoritesStore = useFavoritesStore()
 
 const currentUser = ref(null)
 const isUserLoggedIn = ref(false)
-const showClearAnimation = ref(false)
-const cacheSize = ref('43.2 MB')
+
 const feedbackMessage = ref('')
 const feedbackType = ref('success')
 
@@ -32,10 +35,7 @@ const syncDarkMode = () => {
 }
 
 const toggleTheme = () => {
-  const nextDark = !darkMode.value
-  darkMode.value = nextDark
-  localStorage.setItem('app-theme', nextDark ? 'dark' : 'light')
-  document.documentElement.classList.toggle('dark', nextDark)
+  darkMode.value = applyThemePreference(darkMode.value ? 'light' : 'dark') === 'dark'
 }
 
 const showDialectSheet = ref(false)
@@ -196,7 +196,7 @@ const submitDeleteAccount = async () => {
 
 onMounted(() => {
   refreshCurrentUser()
-  syncDarkMode()
+  darkMode.value = syncThemePreference('app-theme') === 'dark'
 
   themeObserver = new MutationObserver(syncDarkMode)
   themeObserver.observe(document.documentElement, {
@@ -225,23 +225,7 @@ const handleLogout = async () => {
   }, 100)
 }
 
-const clearCache = () => {
-  if (cacheSize.value === '0 KB') return
-  
-  showClearAnimation.value = true
-  // Fake calculation animation
-  let counter = 43
-  const interval = setInterval(() => {
-    counter -= 5
-    if (counter <= 0) {
-      clearInterval(interval)
-      cacheSize.value = '0 KB'
-      showClearAnimation.value = false
-    } else {
-      cacheSize.value = counter.toFixed(1) + ' MB'
-    }
-  }, 100)
-}
+
 </script>
 
 <template>
@@ -334,28 +318,7 @@ const clearCache = () => {
         </div>
       </div>
 
-      <!-- Section: 数据维护 -->
-      <div v-motion-slide-visible-once-bottom :delay="150">
-        <h3 class="text-xs font-bold text-slate-400 pl-4 mb-2 tracking-widest uppercase">数据维护与系统</h3>
-        <div class="settings-card bg-white dark:bg-slate-900 rounded-3xl p-2 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 overflow-hidden transition-colors">
-          
-          <button @click="clearCache" class="w-full h-14 flex items-center justify-between px-4 active:bg-slate-50 transition-colors group">
-            <span class="text-[15px] font-bold text-slate-700">清除本地缓存</span>
-            <div class="flex items-center space-x-2">
-              <span class="text-[13px] font-bold transition-all" :class="cacheSize === '0 KB' ? 'text-green-500' : 'text-slate-400'">{{ cacheSize }}</span>
-              <svg v-if="cacheSize !== '0 KB'" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" :class="{'animate-spin text-green-500 shadow-xl': showClearAnimation}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          </button>
-          
 
-          
-        </div>
-      </div>
 
       <div class="h-6"></div>
 

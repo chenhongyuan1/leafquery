@@ -25,7 +25,7 @@ public class ChatRequest {
     public static class Message {
         private String role;
         private String content;
-        private String imageBase64; // Base64 encoded image data for visual understanding
+        private String imageBase64; // Base64 编码的图片数据，用于提供视觉理解（多模态）能力
 
         public String getRole() {
             return role;

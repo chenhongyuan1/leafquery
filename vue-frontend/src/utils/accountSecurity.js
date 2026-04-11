@@ -1,6 +1,17 @@
 import axios from 'axios'
 
 const USER_STORAGE_KEY = 'user'
+export const AUTH_CHANGE_EVENT = 'leafquery-auth-changed'
+
+const emitAuthChange = (user) => {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return
+  }
+
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGE_EVENT, {
+    detail: { user }
+  }))
+}
 
 export const getStoredUser = () => {
   try {
@@ -12,13 +23,27 @@ export const getStoredUser = () => {
   }
 }
 
+export const requireLoggedInUser = (message = '请先登录后再继续操作。') => {
+  const user = getStoredUser()
+  if (user?.userId) {
+    return user
+  }
+
+  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(message)
+  }
+  return null
+}
+
 export const persistUser = (user) => {
   if (!user) {
     localStorage.removeItem(USER_STORAGE_KEY)
+    emitAuthChange(null)
     return null
   }
 
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
+  emitAuthChange(user)
   return user
 }
 
@@ -66,7 +91,7 @@ export const deleteAccount = async ({ userId, currentPassword }) => {
 }
 
 export const clearUserSession = async ({ farmStore, favoritesStore } = {}) => {
-  localStorage.removeItem(USER_STORAGE_KEY)
+  persistUser(null)
   localStorage.setItem('selected_tab', 'home')
 
   farmStore?.resetToLocal?.()

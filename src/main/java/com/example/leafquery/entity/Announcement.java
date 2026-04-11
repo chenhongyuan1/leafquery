@@ -5,11 +5,12 @@ public class Announcement {
     private Long id;
     private String title;
     private String content;
-    private String type;       // info | warning | urgent
-    private Integer status;    // 1=已发布, 0=草稿
+    private String type; // info | warning | urgent
+    private Integer status; // 1=published, 0=draft
     private String displayMode; // normal=普通通知, popup=弹窗通知
     private Long adminId;
-    private String adminName;  // 非数据库字段, 用于展示
+    private String adminName; // 非数据库字段，用于展示
+    private Boolean read;
     private String createdAt;
     private String updatedAt;
 
@@ -38,6 +39,9 @@ public class Announcement {
 
     public String getAdminName() { return adminName; }
     public void setAdminName(String adminName) { this.adminName = adminName; }
+
+    public Boolean getRead() { return read; }
+    public void setRead(Boolean read) { this.read = read; }
 
     public String getCreatedAt() { return createdAt; }
     public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }

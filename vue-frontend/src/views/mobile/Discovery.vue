@@ -1,9 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useFavoritesStore } from '../../stores/favorites'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useFavoritesStore } from '../../stores/favoritesCloud'
 import NewsCard from '../../components/mobile/NewsCard.vue'
 import QnACard from '../../components/mobile/QnACard.vue'
 import axios from 'axios'
+import { AUTH_CHANGE_EVENT, getStoredUser, requireLoggedInUser } from '../../utils/accountSecurity'
+
+const route = useRoute()
 
 const API_BASE = '/api/discovery'
 
@@ -24,6 +28,7 @@ const newsData = ref([])
 const plantsData = ref([])
 const knowledgeData = ref([])
 const qnaData = ref([])
+const likedPostIds = ref(new Set())
 const loading = ref(false)
 
 // Q&A Post State
@@ -31,6 +36,28 @@ const postText = ref('')
 const postImages = ref([])
 const fileInput = ref(null)
 const currentUser = ref(null)
+
+const syncCurrentUser = () => {
+  currentUser.value = getStoredUser()
+  return currentUser.value
+}
+
+const requireDiscoveryUser = (message) => {
+  const user = requireLoggedInUser(message)
+  if (user?.userId) {
+    currentUser.value = user
+  }
+  return user
+}
+
+const hydrateDiscoverySession = async () => {
+  const user = syncCurrentUser()
+  await favStore.loadFavorites(user?.userId)
+}
+
+const handleAuthChange = () => {
+  hydrateDiscoverySession()
+}
 
 // ========== Fetch data from backend on mount ==========
 const fetchNews = async () => {
@@ -104,6 +131,17 @@ const fetchQna = async () => {
   } catch (e) { console.error('获取问答数据失败', e) }
 }
 
+const fetchLikedPostIds = async () => {
+  try {
+    const user = currentUser.value
+    if (!user?.userId) return
+    const { data } = await axios.get(`${API_BASE}/qna/liked?userId=${user.userId}`)
+    if (data.code === 200 && Array.isArray(data.data)) {
+      likedPostIds.value = new Set(data.data)
+    }
+  } catch (e) { console.error('获取点赞状态失败', e) }
+}
+
 // Utility: safe JSON parse
 const safeParseJSON = (str) => {
   if (!str) return []
@@ -128,12 +166,22 @@ const formatTime = (ts) => {
 
 // Load all data on component mount
 onMounted(async () => {
-  const userStr = localStorage.getItem('user');
-  if (userStr) currentUser.value = JSON.parse(userStr);
-  
+  window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
+  await hydrateDiscoverySession()
+
+  // 从收藏页跳转过来时，自动切换到对应 tab
+  const tabParam = Number(route.query.tab)
+  if (!isNaN(tabParam) && tabParam >= 0 && tabParam < categories.length) {
+    activeCategory.value = tabParam
+  }
+
   loading.value = true
-  await Promise.all([fetchNews(), fetchPlants(), fetchQna()])
+  await Promise.all([fetchNews(), fetchPlants(), fetchQna(), fetchLikedPostIds()])
   loading.value = false
+})
+
+onUnmounted(() => {
+  window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 
 // ========== Computed: current items for active tab ==========
@@ -182,13 +230,17 @@ const getConditionColor = (conditionType) => {
 
 // ========== Actions ==========
 const openPostModal = () => {
-  const userStr = localStorage.getItem('user');
-  if (!userStr) {
-    alert('提问前请先登录！');
-    return;
-  }
-  currentUser.value = JSON.parse(userStr);
+  const user = requireDiscoveryUser('请先登录后再提问！')
+  if (!user) return
+  currentUser.value = user
   isPosting.value = true;
+}
+
+const handleFavoriteToggle = async (item) => {
+  const user = requireDiscoveryUser('请先登录后再收藏。')
+  if (!user) return
+
+  await favStore.toggleFavorite(item)
 }
 
 const handleImageUpload = () => {
@@ -350,7 +402,8 @@ const deletePost = async (postId) => {
               >
                  <!-- Favorite Button (Library Card) -->
                  <button 
-                   @click.stop="favStore.toggleFavorite(item)"
+                   @click.stop="handleFavoriteToggle(item)"
+                   :disabled="favStore.isFavoriteSubmitting"
                    class="discovery-favorite-btn absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center shadow-sm active:scale-90 transition-transform hover:scale-110"
                  >
                    <span class="text-sm transition-transform duration-300" :class="favStore.isFavorite(item) ? 'scale-110 grayscale-0' : 'grayscale text-slate-300'">
@@ -378,7 +431,8 @@ const deletePost = async (postId) => {
             <div v-for="(item, index) in currentItems" :key="item.id" class="relative group cursor-pointer lg:h-full lg:flex lg:flex-col" @click="item.type === 'news' ? selectedNewsItem = item : (item.type === 'qna' ? openQnaDetail(item) : null)">
                <!-- Favorite Button (News/QnA List Item) -->
                <button 
-                  @click.stop="favStore.toggleFavorite(item)"
+                  @click.stop="handleFavoriteToggle(item)"
+                  :disabled="favStore.isFavoriteSubmitting"
                   class="discovery-favorite-btn absolute top-2 right-2 z-[5] w-8 h-8 rounded-full bg-white/50 dark:bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center active:scale-90 transition-transform hover:scale-110 hover:bg-white dark:hover:bg-slate-900 lg:opacity-0 lg:group-hover:opacity-100"
                >
                  <span class="text-sm transition-transform duration-300" :class="favStore.isFavorite(item) ? 'scale-110 grayscale-0' : 'grayscale text-slate-300'">
@@ -386,7 +440,7 @@ const deletePost = async (postId) => {
                  </span>
                </button>
 
-              <QnACard v-if="item.type === 'qna'" v-bind="item" :currentUserId="currentUser?.userId" @delete="deletePost(item.id)" class="lg:h-full lg:hover:shadow-md transition-shadow" />
+              <QnACard v-if="item.type === 'qna'" v-bind="item" :currentUserId="currentUser?.userId" :likedPostIds="likedPostIds" @delete="deletePost(item.id)" class="lg:h-full lg:hover:shadow-md transition-shadow" />
               <NewsCard v-else v-bind="item" class="discovery-news-card h-32 lg:h-36 flex-row lg:hover:shadow-md transition-shadow" />
             </div>
           </template>
@@ -428,7 +482,8 @@ const deletePost = async (postId) => {
         </div>
         <div class="p-4 lg:p-6 border-t border-slate-100 dark:border-slate-800 flex space-x-4 bg-white dark:bg-slate-900 shrink-0 transition-colors">
           <button 
-             @click="favStore.toggleFavorite(selectedLibraryItem)"
+             @click="handleFavoriteToggle(selectedLibraryItem)"
+             :disabled="favStore.isFavoriteSubmitting"
              class="flex-1 lg:flex-none lg:w-48 py-3.5 rounded-xl font-bold text-[15px] transition-colors flex items-center justify-center space-x-2"
              :class="favStore.isFavorite(selectedLibraryItem) ? 'bg-amber-50 text-amber-500' : 'bg-slate-100 text-slate-600 lg:hover:bg-slate-200'"
           >
@@ -447,7 +502,8 @@ const deletePost = async (postId) => {
            <button @click="selectedNewsItem = null" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-600 rounded-full font-bold active:scale-90 transition-transform">✕</button>
            <span class="font-bold text-slate-800 absolute left-1/2 -translate-x-1/2">资讯详情</span>
            <button 
-               @click.stop="favStore.toggleFavorite(selectedNewsItem)"
+               @click.stop="handleFavoriteToggle(selectedNewsItem)"
+               :disabled="favStore.isFavoriteSubmitting"
                class="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
              >
                <span class="text-xl transition-transform duration-300" :class="favStore.isFavorite(selectedNewsItem) ? 'scale-110 grayscale-0' : 'grayscale text-slate-300'">
@@ -505,7 +561,7 @@ const deletePost = async (postId) => {
            <span class="font-bold text-slate-800 absolute left-1/2 -translate-x-1/2">互动详情</span>
         </div>
         <div class="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6 custom-scrollbar">
-            <QnACard v-bind="selectedQnaItem" :currentUserId="currentUser?.userId" @delete="deletePost(selectedQnaItem.id)" class="shadow-none border-none mb-4" />
+            <QnACard v-bind="selectedQnaItem" :currentUserId="currentUser?.userId" :likedPostIds="likedPostIds" @delete="deletePost(selectedQnaItem.id)" class="shadow-none border-none mb-4" />
         </div>
       </div>
     </div>

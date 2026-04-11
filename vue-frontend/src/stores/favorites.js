@@ -1,8 +1,11 @@
+export { useFavoritesStore } from './favoritesCloud'
+
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import axios from 'axios'
+import { getStoredUser } from '../utils/accountSecurity'
 
-export const useFavoritesStore = defineStore('favorites', () => {
+const useFavoritesStoreLegacy = defineStore('favorites-legacy', () => {
     // Format: "type_id" e.g., "news_1", "library_201"
     const favorites = ref(new Set())
     // 存储完整的云端实体快照
@@ -30,19 +33,16 @@ export const useFavoritesStore = defineStore('favorites', () => {
 
         // Try to sync with server if logged in
         try {
-            const userStr = localStorage.getItem('user')
-            if (userStr) {
-                const user = JSON.parse(userStr)
-                if (user && user.userId) {
-                    await axios.post('/api/favorite/toggle', {
-                        userId: user.userId,
-                        itemType: item.type,
-                        itemId: String(item.id),
-                        title: item.title || item.name || (item.content ? item.content.substring(0, 20) : ''),
-                        imageUrl: item.image || item.imageUrl || (item.images ? item.images[0] : ''),
-                        description: item.desc || item.description || ''
-                    })
-                }
+            const user = getStoredUser()
+            if (user?.userId) {
+                await axios.post('/api/favorite/toggle', {
+                    userId: user.userId,
+                    itemType: item.type,
+                    itemId: String(item.id),
+                    title: item.title || item.name || (item.content ? item.content.substring(0, 20) : ''),
+                    imageUrl: item.image || item.imageUrl || (item.images ? item.images[0] : ''),
+                    description: item.desc || item.description || ''
+                })
             }
         } catch (e) {
             console.error('Failed to sync favorite with cloud:', e)

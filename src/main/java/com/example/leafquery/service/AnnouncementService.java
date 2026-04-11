@@ -1,6 +1,7 @@
 package com.example.leafquery.service;
 
 import com.example.leafquery.entity.Announcement;
+import com.example.leafquery.mapper.AnnouncementReadMapper;
 import com.example.leafquery.mapper.AnnouncementMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,16 +14,19 @@ public class AnnouncementService {
     @Autowired
     private AnnouncementMapper announcementMapper;
 
+    @Autowired
+    private AnnouncementReadMapper announcementReadMapper;
+
     public List<Announcement> getAll() {
         return announcementMapper.selectAll();
     }
 
-    public List<Announcement> getPublished() {
-        return announcementMapper.selectPublished();
+    public List<Announcement> getPublished(Long userId) {
+        return announcementMapper.selectPublished(userId);
     }
 
-    public List<Announcement> getPopup() {
-        return announcementMapper.selectPopup();
+    public List<Announcement> getPopup(Long userId) {
+        return announcementMapper.selectPopup(userId);
     }
 
 
@@ -47,5 +51,19 @@ public class AnnouncementService {
 
     public int countAll() {
         return announcementMapper.countAll();
+    }
+
+    public boolean markAsRead(Long userId, Long announcementId) {
+        if (userId == null || announcementId == null) {
+            return false;
+        }
+
+        Announcement announcement = announcementMapper.selectById(announcementId);
+        if (announcement == null) {
+            return false;
+        }
+
+        announcementReadMapper.insertIgnore(userId, announcementId);
+        return true;
     }
 }

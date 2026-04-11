@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.leafquery.mapper.AnnouncementReadMapper">
+
+    <resultMap id="AnnouncementReadResultMap" type="com.example.leafquery.entity.UserAnnouncementRead">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="announcementId" column="announcement_id"/>
+        <result property="readAt" column="read_at"/>
+    </resultMap>
+
+    <insert id="insertIgnore">
+        INSERT IGNORE INTO user_announcement_read (user_id, announcement_id, read_at)
+        VALUES (#{userId}, #{announcementId}, NOW())
+    </insert>
+
+    <select id="selectByUserId" resultMap="AnnouncementReadResultMap">
+        SELECT id, user_id, announcement_id, read_at
+        FROM user_announcement_read
+        WHERE user_id = #{userId}
+        ORDER BY read_at DESC
+    </select>
+
+</mapper>

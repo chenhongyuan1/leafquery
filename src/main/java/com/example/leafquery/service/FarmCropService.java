@@ -113,37 +113,15 @@ public class FarmCropService {
     }
 
     private void normalizeCrop(FarmCrop crop) {
-        boolean handled = true;
-        if (handled) {
-            crop.setCropName(firstNonBlank(crop.getCropName(), "").trim());
-            crop.setStage(firstNonBlank(crop.getStage(), "").trim());
-            crop.setProvince(firstNonBlank(crop.getProvince(), "").trim());
-            crop.setCity(firstNonBlank(crop.getCity(), "").trim());
-            crop.setLocationId(firstNonBlank(crop.getLocationId(), "").trim());
-            crop.setRegion(agroZoneService.normalize(firstNonBlank(crop.getRegion(), "").trim(), crop.getProvince()));
-            crop.setStageMode(normalizeStageMode(crop.getStageMode(), crop));
-            crop.setEstimatedStage(firstNonBlank(crop.getEstimatedStage(), ""));
-            crop.setStageReason(firstNonBlank(crop.getStageReason(), ""));
-            if (crop.getIsActive() == null) {
-                crop.setIsActive(Boolean.FALSE);
-            }
-            return;
-        }
-        if (crop.getStage() == null || crop.getStage().isBlank()) {
-            crop.setStage("拔节期");
-        }
-        if (crop.getProvince() == null) {
-            crop.setProvince("");
-        }
-        if (crop.getCity() == null) {
-            crop.setCity("");
-        }
-        if (crop.getRegion() == null) {
-            crop.setRegion("");
-        }
-        if (crop.getLocationId() == null) {
-            crop.setLocationId("");
-        }
+        crop.setCropName(firstNonBlank(crop.getCropName(), "").trim());
+        crop.setStage(firstNonBlank(crop.getStage(), "").trim());
+        crop.setProvince(firstNonBlank(crop.getProvince(), "").trim());
+        crop.setCity(firstNonBlank(crop.getCity(), "").trim());
+        crop.setLocationId(firstNonBlank(crop.getLocationId(), "").trim());
+        crop.setRegion(agroZoneService.normalize(firstNonBlank(crop.getRegion(), "").trim(), crop.getProvince()));
+        crop.setStageMode(normalizeStageMode(crop.getStageMode(), crop));
+        crop.setEstimatedStage(firstNonBlank(crop.getEstimatedStage(), ""));
+        crop.setStageReason(firstNonBlank(crop.getStageReason(), ""));
         if (crop.getIsActive() == null) {
             crop.setIsActive(Boolean.FALSE);
         }

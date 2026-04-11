@@ -54,4 +54,16 @@
         SELECT COUNT(*) FROM identification_record
     </select>
 
+    <select id="selectById" resultMap="RecordResultMap">
+        SELECT * FROM identification_record WHERE id = #{id}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM identification_record WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteAllByUserId">
+        DELETE FROM identification_record WHERE user_id = #{userId}
+    </delete>
+
 </mapper>

@@ -2,53 +2,67 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import MobileLayout from './layouts/MobileLayout.vue'
 import PCLayout from './layouts/PCLayout.vue'
-import { useFavoritesStore } from './stores/favorites'
+import { useFavoritesStore } from './stores/favoritesCloud'
 import { useFarmStore } from './stores/farmCloud'
+import { AUTH_CHANGE_EVENT, getStoredUser } from './utils/accountSecurity'
+import { syncThemePreference } from './utils/themePreference'
 
-const isMobile = ref(true)
-
-const checkDevice = () => {
-    // Check width or user agent. 
-    // Usually mobile layout is wanted for anything narrower than a tablet/small laptop
-    isMobile.value = window.innerWidth < 1024
+const getIsMobileViewport = () => {
+  if (typeof window === 'undefined') return true
+  return window.innerWidth < 1024
 }
 
-onMounted(() => {
+const isMobile = ref(getIsMobileViewport())
+const favStore = useFavoritesStore()
+const farmStore = useFarmStore()
+
+const checkDevice = () => {
+    // Check width or user agent.
+    // Usually mobile layout is wanted for anything narrower than a tablet/small laptop
+    const nextIsMobile = getIsMobileViewport()
+    const layoutChanged = nextIsMobile !== isMobile.value
+    isMobile.value = nextIsMobile
+    return layoutChanged
+}
+
+const handleViewportChange = () => {
     checkDevice()
-    window.addEventListener('resize', checkDevice)
+}
 
-    // Apply mobile app theme
-    const savedTheme = localStorage.getItem('app-theme')
-    if (savedTheme === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
+const syncFavoritesForCurrentUser = async () => {
+    const user = getStoredUser()
+    await favStore.loadFavorites(user?.userId)
+}
 
-    const farmStore = useFarmStore()
+const syncFarmForCurrentUser = async () => {
+    await farmStore.initialize({ force: true })
+}
 
-    // Load favorites and farm data if user is already logged in
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-        try {
-            const user = JSON.parse(userStr)
-            if (user && user.userId) {
-                const favStore = useFavoritesStore()
-                favStore.loadFavorites(user.userId)
-            }
-        } catch (e) {
-            console.error('Failed to parse user on App mount:', e)
-        }
-    }
+const handleAuthChange = () => {
+    syncFavoritesForCurrentUser()
+    syncFarmForCurrentUser()
+}
 
-    farmStore.initialize()
+syncThemePreference(isMobile.value ? 'app-theme' : 'pc-theme')
+
+onMounted(() => {
+    handleViewportChange()
+    window.addEventListener('resize', handleViewportChange)
+    window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
+
+    syncFavoritesForCurrentUser()
+    syncFarmForCurrentUser()
 })
 
 onUnmounted(() => {
-    window.removeEventListener('resize', checkDevice)
+    window.removeEventListener('resize', handleViewportChange)
+    window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 </script>
 
 <template>
-  <div class="w-full h-full bg-slate-900">
-    <component :is="isMobile ? MobileLayout : PCLayout" />
+  <div class="w-full h-full bg-slate-50 transition-colors dark:bg-slate-900">
+    <MobileLayout v-if="isMobile" key="mobile-layout" />
+    <PCLayout v-else key="pc-layout" />
   </div>
 </template>

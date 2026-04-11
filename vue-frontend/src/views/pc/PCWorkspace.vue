@@ -14,8 +14,8 @@ import {
 const categoryOptions = [
   { key: 'rice',   label: '水稻', value: '水稻', icon: '🌾', group: 'disease' },
   { key: 'corn',   label: '玉米', value: '玉米', icon: '🌽', group: 'disease' },
-  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌿', group: 'disease' },
-  { key: 'other',  label: '其他', value: '其他', icon: '🍃', group: 'disease' },
+  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌾', group: 'disease' },
+  { key: 'other',  label: '其他', value: '其他', icon: '📋', group: 'disease' },
   { key: 'pest',   label: '虫害', value: '虫害', icon: '🐛', group: 'pest'    },
 ]
 const selectedCategories = ref([])
@@ -44,12 +44,24 @@ const fileInput = ref(null)
 
 const isResultReady = ref(false)
 const detectionResult = ref(null)
-const historyItems = ref(JSON.parse(localStorage.getItem('leafquery_history') || '[]'))
+const historyItems = computed(() => (farmStore.identificationHistory || []).map(item => ({
+  id: item.id,
+  name: item.pestName || item.name || '',
+  confidence: Number(item.confidence || 0),
+  time: item.time || item.createTime,
+  imageUrl: item.imageUrl || '',
+  locationId: item.locationId || '',
+  city: item.city || '',
+  region: item.region || ''
+})))
 const yoloUsed = ref(false)
 const reviewRequired = ref(false)
 
+const deletingId = ref(null)
+const isClearing = ref(false)
+
 // ==== 动画阶段 ====
-const analysisStage = ref('')  // '' → 'yolo' → 'review' → 'done'
+const analysisStage = ref('')  // '' -> 'yolo' -> 'review' -> 'done'
 
 // ==== Chat State ====
 const messages = ref([])
@@ -71,7 +83,7 @@ const onImageSelected = (event) => {
   const file = event.target.files?.[0]
   if (file) {
     if (file.size > 10 * 1024 * 1024) {
-      errorMsg.value = '图片大小不能超过10MB'
+      errorMsg.value = '图片大小不能超过 10MB'
       return
     }
     const reader = new FileReader()
@@ -117,35 +129,10 @@ const formatConfidence = (value, digits = 1) => formatConfidencePercent(value, d
 
 onMounted(async () => {
   await farmStore.initialize()
-  fetchHistory()
 })
 
 const fetchHistory = async () => {
-  try {
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      if (user && user.userId) {
-        const response = await axios.get(`/api/record/list?userId=${user.userId}`)
-        if (response.data?.code === 200) {
-          farmStore.syncIdentificationHistory(response.data.data || [])
-          historyItems.value = response.data.data.map(item => ({
-            id: item.id,
-            name: item.pestName,
-            confidence: item.confidence,
-            time: item.createTime,
-            imageUrl: item.imageUrl,
-            locationId: item.locationId,
-            city: item.city,
-            region: item.region
-          }))
-          localStorage.setItem('leafquery_history', JSON.stringify(historyItems.value))
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load history', e)
-  }
+  await farmStore.initialize({ force: true })
 }
 
 const getCurrentUser = () => {
@@ -161,28 +148,29 @@ const getCurrentUser = () => {
 const getLocationId = () => farmStore.activeCrop?.locationId || '101010100'
 
 const persistRecognitionRecord = async (result) => {
-  const newRecord = {
-    id: Date.now(),
-    name: result.pestName || primaryDisplayName.value,
-    confidence: result.confidence || result.primaryConfidence || 0,
-    time: Date.now(),
-    imageUrl: result.imageUrl
-  }
-  historyItems.value.unshift(newRecord)
-  if (historyItems.value.length > 100) historyItems.value.pop()
-  localStorage.setItem('leafquery_history', JSON.stringify(historyItems.value))
-
-  const user = getCurrentUser()
-  if (!user?.userId) return
-
-  await axios.post('/api/record/add', {
-    userId: user.userId,
+  await farmStore.saveIdentification({
     pestName: result.pestName || primaryDisplayName.value,
     confidence: result.confidence || result.primaryConfidence || 0,
     locationId: getLocationId(),
     imageUrl: result.imageUrl
   })
 }
+
+const deleteRecord = async (item, index, event) => {
+  if (event) event.stopPropagation()
+  if (deletingId.value) return
+  deletingId.value = item.id
+  await farmStore.removeIdentification(item.id)
+  deletingId.value = null
+}
+
+const clearAllRecords = async () => {
+  if (!confirm('确认清空全部记录及其图片吗？此操作不可逆。')) return
+  isClearing.value = true
+  await farmStore.clearIdentificationHistory()
+  isClearing.value = false
+}
+
 
 // ===== Drag & Drop Logic =====
 const triggerUpload = () => {
@@ -235,7 +223,7 @@ const processFile = async (file) => {
 
     const response = await axios.post('/api/pest/identify', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000  // 包含 Dify 调用，可能较慢
+      timeout: 120000
     })
 
     if (response.data.report_error) {
@@ -283,13 +271,6 @@ const processFile = async (file) => {
       errorMsg.value = 'YOLO 识别完成，但 AI 复核失败'
     }
 
-    farmStore.addIdentification({
-      pestName: detectionResult.value.pestName,
-      confidence: detectionResult.value.confidence,
-      locationId: getLocationId(),
-      imageUrl: detectionResult.value.imageUrl
-    })
-
     isResultReady.value = true
     try {
       await persistRecognitionRecord(detectionResult.value)
@@ -308,10 +289,28 @@ const processFile = async (file) => {
 
 // ====== 阶段 3：按需生成诊断报告 ======
 const isGeneratingReport = ref(false)
+const reportLoadingSteps = [
+  '检查本地环境数据...',
+  '索引病虫害知识库...',
+  '参考初审/复核结果...',
+  '构建多维度推理中...',
+  'AI 诊断报告生成中...'
+]
+const reportLoadingText = ref(reportLoadingSteps[0])
+let reportLoadingInterval = null
 const generateReport = async () => {
   if (isGeneratingReport.value) return
   isGeneratingReport.value = true
   errorMsg.value = ''
+
+  let stepIndex = 0
+  reportLoadingText.value = reportLoadingSteps[0]
+  reportLoadingInterval = setInterval(() => {
+    stepIndex++
+    if (stepIndex < reportLoadingSteps.length) {
+      reportLoadingText.value = reportLoadingSteps[stepIndex]
+    }
+  }, 3500)
 
   try {
     const params = new URLSearchParams()
@@ -339,6 +338,7 @@ const generateReport = async () => {
     errorMsg.value = '诊断报告生成失败：' + (err.response?.data?.error || '请检查网络')
   } finally {
     isGeneratingReport.value = false
+    if (reportLoadingInterval) clearInterval(reportLoadingInterval)
   }
 }
 
@@ -408,16 +408,16 @@ const renderMarkdown = (text) => {
       <!-- LEFT PANE: Category Selection + Upload + History -->
       <div class="w-1/2 flex flex-col gap-5">
 
-        <!-- ★ Category Selection Panel ★ -->
+        <!-- Category Selection Panel -->
         <div class="shrink-0 rounded-[2rem] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-6 transition-all"
              :class="hasSelection ? 'ring-2 ring-emerald-400/40 border-emerald-300 dark:border-emerald-500/30' : ''">
           <div class="flex items-center gap-2 mb-4">
             <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base">选择检测范围</h3>
-            <span v-if="!hasSelection" class="ml-auto text-xs font-bold text-amber-500 dark:text-amber-300 animate-pulse">← 请至少选一项</span>
+            <span v-if="!hasSelection" class="ml-auto text-xs font-bold text-amber-500 dark:text-amber-300 animate-pulse">请至少选一项</span>
             <span v-else class="ml-auto text-xs font-bold text-emerald-500">已选 {{ selectedCategories.length }} 项</span>
           </div>
 
-          <!-- 病害行 -->
+          <!-- Disease options -->
           <div class="mb-3">
             <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">作物与病害</div>
             <div class="flex flex-wrap gap-2">
@@ -436,7 +436,7 @@ const renderMarkdown = (text) => {
             </div>
           </div>
 
-          <!-- 虫害行 -->
+          <!-- Pest options -->
           <div>
             <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">虫害检测</div>
             <div class="flex flex-wrap gap-2">
@@ -471,41 +471,41 @@ const renderMarkdown = (text) => {
         >
           <input type="file" ref="fileInput" accept="image/*" class="hidden" @change="onFileSelected" />
 
-          <!-- 扫描中 — 多阶段动画 -->
+          <!-- Scanning states -->
           <template v-if="isScanning">
             <img v-if="previewUrl" :src="previewUrl" class="absolute inset-0 w-full h-full object-cover opacity-20 blur-[2px]" />
             <div class="relative z-10 flex flex-col items-center">
-              <!-- YOLO 阶段 -->
+              <!-- YOLO stage -->
               <div v-if="analysisStage === 'yolo'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 relative mb-3">
                   <div class="absolute inset-0 border-4 border-emerald-200 rounded-full dark:border-emerald-800"></div>
                   <div class="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
                 </div>
-                <span class="text-base font-black text-emerald-700 dark:text-emerald-300">🔬 YOLO 模型检测中...</span>
+                <span class="text-base font-black text-emerald-700 dark:text-emerald-300">YOLO 快速检测中...</span>
                 <span class="text-xs text-slate-400 mt-1">正在扫描图像中的病虫害特征</span>
               </div>
 
-              <!-- Vision 复核阶段 -->
+              <!-- Vision review stage -->
               <div v-else-if="analysisStage === 'review'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 relative mb-3">
                   <div class="absolute inset-0 border-4 border-amber-200 rounded-full dark:border-amber-800"></div>
                   <div class="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin" style="animation-duration: 1.5s"></div>
                 </div>
-                <span class="text-base font-black text-amber-700 dark:text-amber-300">🧠 AI 视觉复核中...</span>
+                <span class="text-base font-black text-amber-700 dark:text-amber-300">AI 视觉复核中...</span>
                 <span class="text-xs text-slate-400 mt-1">大模型正在对图像进行深度分析</span>
               </div>
 
-              <!-- 完成阶段 -->
+              <!-- Done stage -->
               <div v-else-if="analysisStage === 'done'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/15 rounded-full flex items-center justify-center mb-3">
-                  <span class="text-3xl">✅</span>
+                  <span class="text-3xl">✓</span>
                 </div>
                 <span class="text-base font-black text-emerald-700 dark:text-emerald-300">分析完成</span>
               </div>
             </div>
           </template>
 
-          <!-- 未扫描 — 上传提示 -->
+          <!-- Idle upload state -->
           <template v-else>
             <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4 transition-transform group-hover:scale-110 shadow-sm border border-slate-200 dark:border-slate-700">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8 text-slate-400 dark:text-slate-500">
@@ -518,23 +518,47 @@ const renderMarkdown = (text) => {
         </div>
 
         <div v-if="errorMsg" class="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-200">
-           提示：{{ errorMsg }}
+          提示：{{ errorMsg }}
         </div>
 
         <!-- History Strip -->
-        <div class="flex-1 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 flex flex-col min-h-0 overflow-hidden">
-           <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg mb-4 flex items-center"><span class="mr-2">📋</span> 诊断记录</h3>
+        <div class="flex-1 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 flex flex-col min-h-0 overflow-hidden relative">
+           <div class="flex items-center justify-between mb-4">
+             <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg flex items-center"><span class="mr-2">🕓</span> 识别记录</h3>
+             <button
+               v-if="historyItems.length > 0"
+               @click="clearAllRecords"
+               :disabled="isClearing"
+               class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-100 bg-red-50 text-red-500 text-xs font-bold hover:bg-red-100 hover:text-red-600 transition-colors dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 disabled:opacity-50"
+             >
+               <svg v-if="isClearing" class="animate-spin w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+               <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
+               清空记录
+             </button>
+           </div>
            <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 grid grid-cols-2 xl:grid-cols-3 gap-3 content-start">
              <div v-if="historyItems.length === 0" class="col-span-full py-8 text-center text-sm text-slate-400 dark:text-slate-500">暂无记录，立刻上传第一张图片吧</div>
 
-             <div v-for="item in historyItems" :key="item.id" class="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-green-300 hover:shadow-md transition-all flex items-center gap-3 group cursor-pointer">
-               <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shrink-0">
-                 <img v-if="item.imageUrl" :src="item.imageUrl" class="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+             <div v-for="(item, index) in historyItems" :key="item.id" class="p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-green-300 hover:shadow-md transition-all flex items-center gap-3 group cursor-pointer relative">
+               <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden shrink-0 shadow-sm">
+                 <img v-if="item.imageUrl" :src="item.imageUrl" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                </div>
-               <div class="min-w-0">
+               <div class="min-w-0 pr-6">
                  <div class="font-bold text-slate-800 dark:text-slate-100 text-sm truncate w-full">{{ item.name }}</div>
                 <div class="text-[11px] font-bold mt-0.5" :class="item.confidence > 0.8 ? 'text-green-500' : 'text-orange-500'">AI 置信度 {{ (item.confidence * 100).toFixed(0) }}%</div>
                </div>
+               
+               <!-- 单条删除按钮 -->
+               <button
+                 @click="deleteRecord(item, index, $event)"
+                 :disabled="deletingId === item.id"
+                 class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all dark:text-slate-600 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                 :class="{ 'opacity-100': deletingId === item.id }"
+                title="删除这条记录"
+               >
+                 <svg v-if="deletingId !== item.id" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                 <svg v-else class="animate-spin w-4 h-4 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+               </button>
              </div>
            </div>
         </div>
@@ -546,7 +570,7 @@ const renderMarkdown = (text) => {
             <div class="flex-1 flex flex-col items-center justify-center bg-slate-50/50 text-slate-300 dark:bg-slate-900/50 dark:text-slate-600">
                <div class="text-6xl mb-6 grayscale opacity-30 font-black">AI</div>
                <h3 class="mb-2 text-xl font-bold text-slate-600 dark:text-slate-200">工作台等待接入</h3>
-               <p class="text-sm text-slate-400 dark:text-slate-500">选择检测范围并上传图片即可激活 Dify 大模型专家流</p>
+               <p class="text-sm text-slate-400 dark:text-slate-500">选择检测范围并上传图片后，将在这里显示 AI 诊断结果</p>
             </div>
          </template>
 
@@ -554,7 +578,7 @@ const renderMarkdown = (text) => {
             <!-- Result Header -->
             <div class="shrink-0 p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
 
-              <!-- YOLO 检测结果面板 -->
+              <!-- Result summary -->
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
                   <div class="w-14 h-14 rounded-2xl overflow-hidden shadow-md">
@@ -562,17 +586,17 @@ const renderMarkdown = (text) => {
                   </div>
                   <div>
                     <div class="text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                      <span v-if="yoloUsed" class="text-emerald-500">🔬 YOLO 检测</span>
-                      <span v-else class="text-amber-500">🧠 Vision AI 诊断</span>
+                      <span v-if="yoloUsed" class="text-emerald-500">YOLO 检测</span>
+                      <span v-else class="text-amber-500">Vision AI 诊断</span>
                     </div>
                     <div class="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{{ primaryDisplayName }}</div>
                     <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold">
                       <span class="rounded-full px-3 py-1" :class="sceneBadgeClasses">{{ sceneMeta.label }}</span>
                       <span v-if="reviewRequired && detectionResult?.reviewResult" class="rounded-full bg-emerald-100 px-3 py-1 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
-                        🧠 已复核
+                        已复核
                       </span>
                       <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-100 px-3 py-1 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
-                        ⏳ 待复核
+                        待复核
                       </span>
                       <span v-else-if="!reviewRequired && yoloUsed" class="rounded-full bg-slate-100 px-3 py-1 text-slate-500 dark:bg-slate-700 dark:text-slate-400">
                         无需复核
@@ -586,7 +610,7 @@ const renderMarkdown = (text) => {
                 </div>
               </div>
 
-              <!-- YOLO 检测详情（仅 YOLO 路径展示） -->
+              <!-- YOLO detection details -->
               <div v-if="yoloUsed && summaryItems.length" class="mt-4 grid gap-2 xl:grid-cols-2">
                 <div
                   v-for="item in summaryItems"
@@ -603,22 +627,22 @@ const renderMarkdown = (text) => {
                 </div>
               </div>
 
-              <!-- 复核结论卡片（阶段 2 结果） -->
+              <!-- Review result -->
               <div v-if="detectionResult?.reviewResult" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/20 dark:bg-emerald-500/5 p-4">
                 <div class="flex items-center gap-2 mb-2">
-                  <span class="text-base">🧠</span>
-                  <span class="text-sm font-bold text-emerald-800 dark:text-emerald-200">AI 视觉复核结论</span>
+                  <span class="text-base">🔍</span>
+                  <span class="text-sm font-bold text-emerald-800 dark:text-emerald-200">AI 视觉复核结果</span>
                 </div>
                 <div class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
               </div>
 
-              <!-- 待复核提示（Dify 复核失败时） -->
+              <!-- Review unavailable -->
               <div v-else-if="reviewRequired" class="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/5 px-4 py-3 flex items-center gap-2">
-                <span class="text-base">⏳</span>
+                <span class="text-base">⚠</span>
                 <span class="text-xs font-bold text-amber-700 dark:text-amber-300">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
               </div>
 
-              <!-- 阶段 3：生成诊断报告按钮 -->
+              <!-- Generate report -->
               <button 
                 v-if="!detectionResult?.report"
                 @click="generateReport" 
@@ -630,11 +654,11 @@ const renderMarkdown = (text) => {
               >
                 <template v-if="isGeneratingReport">
                   <svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                  <span>AI 诊断报告生成中...</span>
+                  <span class="animate-pulse truncate">{{ reportLoadingText }}</span>
                 </template>
                 <template v-else>
-                  <span>📋</span>
-                  <span>生成 AI 诊断建议</span>
+                  <span>📝</span>
+                  <span>生成 AI 诊断报告</span>
                   <span v-if="reviewRequired" class="text-xs opacity-80 ml-1">(推荐)</span>
                 </template>
               </button>
@@ -689,7 +713,7 @@ const renderMarkdown = (text) => {
                      <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                    </svg>
                  </button>
-                 <input v-model="userInput" type="text" placeholder="就这次诊断结果向大模型提问..." :disabled="isSending"
+                 <input v-model="userInput" type="text" placeholder="围绕本次识别结果继续追问..." :disabled="isSending"
                         class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-2xl pl-[3.25rem] pr-14 py-4 font-medium focus:outline-none focus:border-green-400 focus:ring-4 focus:ring-green-400/10 transition-all" />
                  <button type="submit" :disabled="!(userInput.trim() || pendingImage) || isSending"
                          class="absolute right-2 top-2 bottom-2 aspect-square rounded-xl bg-slate-900 text-white shadow-md transition-all hover:bg-black disabled:bg-slate-300 disabled:text-slate-500 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400 dark:disabled:bg-slate-700 dark:disabled:text-slate-500">
@@ -719,3 +743,4 @@ const renderMarkdown = (text) => {
   animation: fadeIn 0.4s ease-out;
 }
 </style>
+

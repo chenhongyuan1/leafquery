@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -9,7 +9,8 @@ import VChart from 'vue-echarts'
 
 use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent])
 
-const isDark = computed(() => localStorage.getItem('pc-theme') === 'dark')
+const isDark = ref(document.documentElement.classList.contains('dark'))
+let themeObserver = null
 
 // ==== Dashboard Data ====
 const recordCount = ref(0)
@@ -18,6 +19,11 @@ const diseaseDistribution = ref([])
 const historyItems = ref([])
 
 onMounted(async () => {
+  themeObserver = new MutationObserver(() => {
+    isDark.value = document.documentElement.classList.contains('dark')
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+
   try {
     const userStr = localStorage.getItem('user')
     if (!userStr) return
@@ -44,6 +50,10 @@ onMounted(async () => {
         .map(([name, value]) => ({ name, value }))
     }
   } catch (e) { console.error('Data fetch failed', e) }
+})
+
+onUnmounted(() => {
+  themeObserver?.disconnect()
 })
 
 // ==== ECharts Configs ====

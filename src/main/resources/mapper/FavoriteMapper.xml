@@ -15,12 +15,17 @@
     </resultMap>
 
     <insert id="insertFavorite" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO user_favorite (user_id, item_type, item_id, title, image_url, description, create_time)
+        INSERT IGNORE INTO user_favorite (user_id, item_type, item_id, title, image_url, description, create_time)
         VALUES (#{userId}, #{itemType}, #{itemId}, #{title}, #{imageUrl}, #{description}, NOW())
     </insert>
 
     <delete id="deleteFavorite">
         DELETE FROM user_favorite WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByUserIdAndItem">
+        DELETE FROM user_favorite
+        WHERE user_id = #{userId} AND item_type = #{itemType} AND item_id = #{itemId}
     </delete>
 
     <select id="selectByUserIdAndItem" resultMap="FavoriteResultMap">
