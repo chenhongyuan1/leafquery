@@ -21,7 +21,7 @@ public class RecordService {
     @Autowired
     private RecordMapper recordMapper;
 
-    @Value("${app.upload.dir:./vue-frontend/public/images/uploads}")
+    @Value("${app.upload.dir:./user-frontend/public/images/uploads}")
     private String uploadDirPath;
 
     public boolean addRecord(Record record) {

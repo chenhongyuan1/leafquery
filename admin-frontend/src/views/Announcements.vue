@@ -1,9 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useAdminStore } from '../stores/admin'
 import api from '../api'
 
-const store = useAdminStore()
 const list = ref([])
 const showModal = ref(false)
 const editing = ref(null)
@@ -32,10 +30,10 @@ function openEdit(item) {
 async function save() {
   if (!form.value.title) return
   if (editing.value) {
-    await api.put(`/announcements/${editing.value.id}`, { ...form.value, adminId: store.adminId })
+    await api.put(`/announcements/${editing.value.id}`, form.value)
     showToast('公告已更新')
   } else {
-    await api.post('/announcements', { ...form.value, adminId: store.adminId })
+    await api.post('/announcements', form.value)
     showToast('公告已创建')
   }
   showModal.value = false
@@ -44,7 +42,7 @@ async function save() {
 
 async function remove(id) {
   if (!confirm('确定删除该公告？')) return
-  await api.delete(`/announcements/${id}?adminId=${store.adminId}`)
+  await api.delete(`/announcements/${id}`)
   showToast('公告已删除')
   load()
 }

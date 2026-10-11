@@ -5,7 +5,7 @@ import com.example.leafquery.dto.PredictionResult;
 import com.example.leafquery.service.DetectionSelectionService;
 import com.example.leafquery.service.DifyService;
 import com.example.leafquery.service.LocalImageStorageService;
-import com.example.leafquery.service.PestDetectionService;
+import com.example.leafquery.service.PlantHealthInferenceClient;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,17 +30,17 @@ public class PestDetectionController {
 
     private static final Logger log = LoggerFactory.getLogger(PestDetectionController.class);
 
-    private final PestDetectionService pestDetectionService;
+    private final PlantHealthInferenceClient plantHealthInferenceClient;
     private final DifyService difyService;
     private final LocalImageStorageService localImageStorageService;
     private final DetectionSelectionService detectionSelectionService;
 
     public PestDetectionController(
-            PestDetectionService pestDetectionService,
+            PlantHealthInferenceClient plantHealthInferenceClient,
             DifyService difyService,
             LocalImageStorageService localImageStorageService,
             DetectionSelectionService detectionSelectionService) {
-        this.pestDetectionService = pestDetectionService;
+        this.plantHealthInferenceClient = plantHealthInferenceClient;
         this.difyService = difyService;
         this.localImageStorageService = localImageStorageService;
         this.detectionSelectionService = detectionSelectionService;
@@ -72,7 +72,7 @@ public class PestDetectionController {
             PredictionResult prediction = null;
 
             if (yoloUsed) {
-                prediction = pestDetectionService.detectPest(file, categoryList);
+                prediction = plantHealthInferenceClient.predict(file, categoryList);
                 log.info("YOLO detection completed: scene={}, primary={}",
                         prediction.getSceneType(), prediction.getPrimaryTargetZh());
             } else {
@@ -183,7 +183,7 @@ public class PestDetectionController {
         }
 
         try {
-            PredictionResult prediction = pestDetectionService.detectPest(file);
+            PredictionResult prediction = plantHealthInferenceClient.predict(file);
             LocalImageStorageService.StoredImageReference imageReference =
                     localImageStorageService.saveIdentificationImageReference(file);
 

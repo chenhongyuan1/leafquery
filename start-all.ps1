@@ -146,8 +146,8 @@ function Get-Environment {
         throw 'The local profile requires src/main/resources/application-local.properties.'
     }
     foreach ($file in @('mvnw.cmd', '.mvn/wrapper/maven-wrapper.properties', 'python_service/app.py',
-        'python_service/best.pt', 'docs/detection_target_metadata_clean.json',
-        'vue-frontend/package.json', 'admin-frontend/package.json')) {
+        'python_service/best.pt', 'docs/detection_target_metadata.json',
+        'user-frontend/package.json', 'admin-frontend/package.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $AppRoot $file) -PathType Leaf)) {
             throw "Required file is missing: $file"
         }
@@ -216,7 +216,7 @@ function Get-Environment {
 }
 
 function Prepare-Dependencies($Environment) {
-    foreach ($frontend in @('vue-frontend', 'admin-frontend')) {
+    foreach ($frontend in @('user-frontend', 'admin-frontend')) {
         $directory = Join-Path $AppRoot $frontend
         if (-not (Test-Path -LiteralPath (Join-Path $directory 'node_modules/vite/bin/vite.js'))) {
             if ($NoInstall) { throw "$frontend dependencies are missing. Run without -NoInstall to install." }
@@ -307,7 +307,7 @@ try {
     if ($Action -eq 'check') {
         $environment = Get-Environment
         $missing = @()
-        foreach ($frontend in @('vue-frontend', 'admin-frontend')) {
+        foreach ($frontend in @('user-frontend', 'admin-frontend')) {
             if (-not (Test-Path -LiteralPath (Join-Path $AppRoot "$frontend/node_modules/vite/bin/vite.js"))) {
                 $missing += $frontend
             }
@@ -370,13 +370,13 @@ try {
     # files in the workspace to avoid failures with this machine's Unicode TEMP path.
     $javaTemp = Join-Path $RuntimeRoot 'java-tmp'
     New-Item -ItemType Directory -Path $javaTemp -Force | Out-Null
-    $metadataPath = Join-Path $AppRoot 'docs/detection_target_metadata_clean.json'
+    $metadataPath = Join-Path $AppRoot 'docs/detection_target_metadata.json'
     if ($env:DETECTION_METADATA_PATH) {
         $metadataPath = $env:DETECTION_METADATA_PATH
         if (-not [IO.Path]::IsPathRooted($metadataPath)) { $metadataPath = Join-Path $AppRoot $metadataPath }
     }
     $uploadPath = $env:UPLOAD_DIR
-    if (-not $uploadPath) { $uploadPath = Join-Path $AppRoot 'vue-frontend/public/images/uploads' }
+    if (-not $uploadPath) { $uploadPath = Join-Path $AppRoot 'user-frontend/public/images/uploads' }
     elseif (-not [IO.Path]::IsPathRooted($uploadPath)) { $uploadPath = Join-Path $AppRoot $uploadPath }
     $pythonUrl = $env:PYTHON_AI_URL
     if (-not $pythonUrl) { $pythonUrl = 'http://localhost:5000/predict' }
@@ -393,7 +393,7 @@ try {
             Variables = @{ PORT = '5000'; PYTHONUNBUFFERED = '1'; DETECTION_METADATA_PATH = $metadataPath } }
         backend = @{ Directory = $AppRoot; Command = ('& ' + (Quote-Ps (Join-Path $AppRoot 'mvnw.cmd')) + ' spring-boot:run');
             Variables = $backendVariables }
-        frontend = @{ Directory = (Join-Path $AppRoot 'vue-frontend');
+        frontend = @{ Directory = (Join-Path $AppRoot 'user-frontend');
             Command = ('& ' + (Quote-Ps $environment.Npm) + ' run dev -- --host localhost --port 5173 --strictPort');
             Variables = @{ VITE_API_BASE_URL = '' } }
         admin = @{ Directory = (Join-Path $AppRoot 'admin-frontend');

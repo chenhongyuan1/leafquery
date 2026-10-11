@@ -102,7 +102,10 @@ public class UserController {
         }
 
         user.setUsername(newUsername);
-        userService.updateUser(user);
+        User updatePayload = new User();
+        updatePayload.setUserId(userId);
+        updatePayload.setUsername(newUsername);
+        userService.updateUser(updatePayload);
 
         // 返回更新后的用户对象
         response.put("code", 200);

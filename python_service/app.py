@@ -13,7 +13,7 @@ from flask_cors import CORS
 from PIL import Image
 from ultralytics import YOLO
 
-from class_name_translation_clean import translate_class_name, get_target_metadata
+from class_name_translation import translate_class_name, get_target_metadata
 
 app = Flask(__name__)
 CORS(app)
@@ -31,7 +31,7 @@ _FALLBACK_YOLO_SUPPORTED = {"水稻", "玉米", "小麦", "虫害"}
 
 
 def _load_category_index():
-    """加载 detection_target_metadata_clean.json，构建：
+    """加载 detection_target_metadata.json，构建：
     1. 类名 → 作物和类型的索引（用于 is_class_allowed 筛查）
     2. yoloSupportedCategories（与 Java 端共享的用户类别集）
     """
@@ -41,7 +41,7 @@ def _load_category_index():
         catalog_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "docs",
-            "detection_target_metadata_clean.json",
+            "detection_target_metadata.json",
         )
     supported = _FALLBACK_YOLO_SUPPORTED
     try:

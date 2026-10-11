@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="vue-frontend/public/vite.svg" alt="LeafQuery 应用图标" width="120" height="120" />
+<img src="user-frontend/public/vite.svg" alt="LeafQuery 应用图标" width="120" height="120" />
 
 # 基于多模型协同的农作物病虫害智能识别与预测 LeafQuery
 
@@ -63,7 +63,7 @@ flowchart LR
 
 ## 识别与复核规则
 
-YOLO 输出的类别编号先由 Python 转换为训练类别中的英文名称，再通过 [类别元数据配置](docs/detection_target_metadata_clean.json) 映射为中文业务名称。Java 与 Python 共同读取这份 JSON 配置，以避免两端分别维护类别列表。
+YOLO 输出的类别编号先由 Python 转换为训练类别中的英文名称，再通过 [类别元数据配置](docs/detection_target_metadata.json) 映射为中文业务名称。Java 与 Python 共同读取这份 JSON 配置，以避免两端分别维护类别列表。
 
 当前识别门控逻辑如下：
 
@@ -122,7 +122,7 @@ leafquery/
 ├── src/main/java/com/example/leafquery/  # Spring Boot 控制器、服务、实体与 Mapper
 ├── src/main/resources/                   # 配置、SQL、MyBatis 映射
 ├── python_service/                       # Flask + YOLO 推理服务及 best.pt
-├── vue-frontend/                         # 移动端与 PC 用户端
+├── user-frontend/                         # 移动端与 PC 用户端
 ├── admin-frontend/                       # 独立运营管理后台
 ├── docs/                                 # 类别配置与项目资料
 ├── .env.example                          # 本机环境变量模板
@@ -188,7 +188,7 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 | `.env.example` | 本机配置模板，可提交 Git | 不读取，复制为 `.env` 后填写 |
 | `.env.production` | 服务器实际配置，不提交 Git | 由部署平台或下面的 systemd 示例加载 |
 | `.env.production.example` | 服务器配置模板，可提交 Git | 不读取，复制后填写 |
-| `vue-frontend/.env.production` | 用户端正式打包时的公开参数 | 用户端执行 `npm run build` 时由 Vite 读取 |
+| `user-frontend/.env.production` | 用户端正式打包时的公开参数 | 用户端执行 `npm run build` 时由 Vite 读取 |
 | `admin-frontend/.env.production` | 管理端正式打包时的公开参数 | 管理端执行 `npm run build` 时由 Vite 读取 |
 
 后端的开发模式叫 `dev`，生产模式叫 `prod`；前端 Vite 的对应模式叫 `development` 和 `production`。两端独立选择环境，文件存在本身不会切换后端环境。
@@ -255,7 +255,7 @@ python app.py
 #### 用户端
 
 ```powershell
-cd vue-frontend
+cd user-frontend
 npm ci
 npm run dev -- --port 5173 --strictPort
 ```
@@ -298,7 +298,7 @@ chmod 600 .env.production
 | `DB_USERNAME`、`DB_PASSWORD` | 服务器专用数据库账号和密码 |
 | `UPLOAD_DIR` | `/srv/leafquery/uploads`，作为持久化目录保留 |
 | `PYTHON_AI_URL` | 本例为 `http://127.0.0.1:5000/predict` |
-| `DETECTION_METADATA_PATH` | `/opt/leafquery/docs/detection_target_metadata_clean.json` |
+| `DETECTION_METADATA_PATH` | `/opt/leafquery/docs/detection_target_metadata.json` |
 | `SERVER_ADDRESS`、`SERVER_PORT` | 本例为 `127.0.0.1`、`8080` |
 
 Dify、豆包、天气和语音变量按实际启用的功能填写。使用 UTF-8 无 BOM 保存环境文件，每行写 `变量名=值`；密钥可用引号包住，天气私钥使用单行 Base64。systemd 的环境文件解析规则与本地启动器不同，勿直接套用本地的 `\n` 转义格式。
@@ -333,7 +333,7 @@ After=network.target
 [Service]
 User=leafquery
 WorkingDirectory=/opt/leafquery/python_service
-Environment=DETECTION_METADATA_PATH=/opt/leafquery/docs/detection_target_metadata_clean.json
+Environment=DETECTION_METADATA_PATH=/opt/leafquery/docs/detection_target_metadata.json
 ExecStart=/opt/leafquery/python_service/.venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --timeout 180 app:app
 Restart=on-failure
 
@@ -374,7 +374,7 @@ sudo systemctl status leafquery-python leafquery-backend
 编辑各自目录中的 `.env.production`，下面使用两个示例域名，均不带末尾 `/` 或 `/api`：
 
 ```dotenv
-# vue-frontend/.env.production
+# user-frontend/.env.production
 VITE_API_BASE_URL=https://app.example.com
 ```
 
@@ -384,7 +384,7 @@ VITE_API_BASE_URL=https://admin.example.com
 ```
 
 ```bash
-cd /opt/leafquery/vue-frontend
+cd /opt/leafquery/user-frontend
 npm ci
 npm run build
 
@@ -405,7 +405,7 @@ server {
     server_name app.example.com;
     ssl_certificate /etc/letsencrypt/live/app.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
-    root /opt/leafquery/vue-frontend/dist;
+    root /opt/leafquery/user-frontend/dist;
     index index.html;
     client_max_body_size 12m;
 

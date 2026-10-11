@@ -25,7 +25,7 @@ async function handleLogin() {
       password: password.value
     })
     if (data.code === 200) {
-      store.login(data.data)
+      store.login(data.data, data.token)
       router.push('/')
     } else {
       error.value = data.message || '登录失败'

@@ -2,6 +2,7 @@ package com.example.leafquery.service;
 
 import com.example.leafquery.entity.User;
 import com.example.leafquery.mapper.UserMapper;
+import com.example.leafquery.security.PasswordHashService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +13,9 @@ public class UserSecurityService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private PasswordHashService passwords;
 
     public User changePassword(Long userId, String currentPassword, String newPassword) {
         if (userId == null) {
@@ -30,22 +34,19 @@ public class UserSecurityService {
         if (existingUser == null) {
             throw new IllegalStateException(USER_NOT_FOUND);
         }
-        if (!currentPassword.equals(existingUser.getPassword())) {
+        if (!passwords.matches(currentPassword, existingUser.getPassword())) {
             throw new IllegalArgumentException("当前密码不正确");
         }
         if (currentPassword.equals(normalizedNewPassword)) {
             throw new IllegalArgumentException("新密码不能与当前密码相同");
         }
 
-        User updatePayload = new User();
-        updatePayload.setUserId(userId);
-        updatePayload.setPassword(normalizedNewPassword);
-
-        if (userMapper.updateUser(updatePayload) <= 0) {
+        String hash = passwords.encode(normalizedNewPassword);
+        if (userMapper.updatePasswordIfUnchanged(userId, existingUser.getPassword(), hash) <= 0) {
             throw new RuntimeException("密码更新失败");
         }
 
-        existingUser.setPassword(normalizedNewPassword);
+        existingUser.setPassword(hash);
         return existingUser;
     }
 
@@ -61,10 +62,10 @@ public class UserSecurityService {
         if (existingUser == null) {
             throw new IllegalStateException(USER_NOT_FOUND);
         }
-        if (!currentPassword.equals(existingUser.getPassword())) {
+        if (!passwords.matches(currentPassword, existingUser.getPassword())) {
             throw new IllegalArgumentException("当前密码不正确");
         }
-        if (userMapper.deleteByUserId(userId) <= 0) {
+        if (userMapper.deleteIfPasswordUnchanged(userId, existingUser.getPassword()) <= 0) {
             throw new RuntimeException("注销账号失败");
         }
     }

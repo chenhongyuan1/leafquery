@@ -21,7 +21,7 @@ public class LocalImageStorageService {
     private final Path uploadRoot;
 
     public LocalImageStorageService(
-            @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./vue-frontend/public/images/uploads}") String uploadDirPath) {
+            @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./user-frontend/public/images/uploads}") String uploadDirPath) {
         this.uploadRoot = Path.of(uploadDirPath).toAbsolutePath().normalize();
     }
 

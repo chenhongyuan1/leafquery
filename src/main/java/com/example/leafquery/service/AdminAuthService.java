@@ -2,6 +2,7 @@ package com.example.leafquery.service;
 
 import com.example.leafquery.entity.AdminUser;
 import com.example.leafquery.mapper.AdminUserMapper;
+import com.example.leafquery.security.PasswordHashService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -13,14 +14,32 @@ public class AdminAuthService {
     @Autowired
     private AdminUserMapper adminUserMapper;
 
+    @Autowired
+    private PasswordHashService passwords;
+
     /**
      * 管理员登录
      */
     public AdminUser login(String username, String password) {
         AdminUser admin = adminUserMapper.selectByUsername(username);
-        if (admin != null && password.equals(admin.getPassword())) {
-            if (admin.getStatus() == 0) {
+        if (admin != null && passwords.matches(password, admin.getPassword())) {
+            if (!Integer.valueOf(1).equals(admin.getStatus())
+                    || !("admin".equals(admin.getRole()) || "super_admin".equals(admin.getRole()))) {
                 return null; // 账号已禁用
+            }
+            if (passwords.needsUpgrade(admin.getPassword())) {
+                String hash = passwords.encode(password);
+                if (adminUserMapper.updatePasswordIfUnchanged(admin.getAdminId(), admin.getPassword(), hash) > 0) {
+                    admin.setPassword(hash);
+                } else {
+                    admin = adminUserMapper.selectById(admin.getAdminId());
+                    if (admin == null || !Integer.valueOf(1).equals(admin.getStatus())
+                            || !("admin".equals(admin.getRole()) || "super_admin".equals(admin.getRole()))
+                            || passwords.needsUpgrade(admin.getPassword())
+                            || !passwords.matches(password, admin.getPassword())) {
+                        return null;
+                    }
+                }
             }
             adminUserMapper.updateLastLogin(admin.getAdminId());
             return admin;
@@ -46,6 +65,9 @@ public class AdminAuthService {
      * 新增管理员 (仅 super_admin 可操作)
      */
     public String createAdmin(AdminUser admin) {
+        if (admin.getPassword() == null || admin.getPassword().isBlank()) {
+            return "密码不能为空";
+        }
         AdminUser existing = adminUserMapper.selectByUsername(admin.getUsername());
         if (existing != null) {
             return "用户名已存在";
@@ -56,6 +78,7 @@ public class AdminAuthService {
         if (admin.getRole() == null || admin.getRole().isEmpty()) {
             admin.setRole("admin");
         }
+        admin.setPassword(passwords.encode(admin.getPassword()));
         int rows = adminUserMapper.insert(admin);
         return rows > 0 ? "success" : "创建失败";
     }

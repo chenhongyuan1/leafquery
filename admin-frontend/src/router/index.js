@@ -36,13 +36,13 @@ const router = createRouter({
     {
       path: '/system',
       name: 'system',
-      component: () => import('../views/SystemMgmt.vue'),
+      component: () => import('../views/SystemManagementView.vue'),
       meta: { requiresAuth: true, superOnly: true }
     },
     {
       path: '/models',
       name: 'models',
-      component: () => import('../views/ModelMgmt.vue'),
+      component: () => import('../views/ModelManagementView.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -55,10 +55,15 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const admin = localStorage.getItem('admin')
-  if (to.meta.requiresAuth && !admin) {
+  const token = sessionStorage.getItem('admin_token')
+  let admin = null
+  try { admin = JSON.parse(sessionStorage.getItem('admin') || 'null') } catch { /* invalid display data */ }
+  const loggedIn = !!token && !!admin
+  if (to.meta.requiresAuth && !loggedIn) {
     next('/login')
-  } else if (to.meta.guest && admin) {
+  } else if (to.meta.superOnly && admin?.role !== 'super_admin') {
+    next('/')
+  } else if (to.meta.guest && loggedIn) {
     next('/')
   } else {
     next()

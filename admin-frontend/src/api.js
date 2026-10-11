@@ -1,22 +1,30 @@
 import axios from 'axios'
 
+const environment = import.meta.env || {}
 const api = axios.create({
-  baseURL: (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080') + '/api/admin',
+  baseURL: (environment.VITE_API_BASE_URL || 'http://localhost:8080') + '/api/admin',
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' }
 })
 
-// 请求拦截器: 自动附带管理员角色
+// 仅传递服务端签发的令牌；角色和管理员 ID 由服务端查询。
 api.interceptors.request.use(config => {
-  const adminStr = localStorage.getItem('admin')
-  if (adminStr) {
-    try {
-      const admin = JSON.parse(adminStr)
-      config.headers['X-Admin-Role'] = admin.role || ''
-      config.headers['X-Admin-Id'] = admin.adminId || ''
-    } catch (e) { /* ignore */ }
+  const token = sessionStorage.getItem('admin_token')
+  if (token && config.url !== '/login') {
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
+})
+
+api.interceptors.response.use(response => response, error => {
+  if (error.response?.status === 401 && error.config?.url !== '/login') {
+    sessionStorage.removeItem('admin_token')
+    sessionStorage.removeItem('admin')
+    localStorage.removeItem('admin')
+    const loginPath = `${environment.BASE_URL || '/'}login`
+    if (window.location.pathname !== loginPath) window.location.assign(loginPath)
+  }
+  return Promise.reject(error)
 })
 
 export default api

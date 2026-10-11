@@ -21,7 +21,7 @@ import java.util.Set;
  * 1. 根据用户预选类别判断是否需要跑 YOLO
  * 2. 根据 YOLO 结果判断是否需要 Vision LLM 复核
  *
- * YOLO 支持的用户类别从 detection_target_metadata_clean.json 读取，
+ * YOLO 支持的用户类别从 detection_target_metadata.json 读取，
  * 与 Python 端共享同一数据源，避免双端硬编码分叉。
  */
 @Service
@@ -32,7 +32,7 @@ public class DetectionSelectionService {
     /** 兜底值：JSON 加载失败时使用 */
     private static final Set<String> FALLBACK_YOLO_SUPPORTED = Set.of("水稻", "玉米", "小麦", "虫害");
 
-    @Value("${detection.metadata.path:./docs/detection_target_metadata_clean.json}")
+    @Value("${detection.metadata.path:./docs/detection_target_metadata.json}")
     private String metadataPath;
 
     private Set<String> yoloSupported;

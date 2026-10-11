@@ -24,7 +24,7 @@ public class DiscoveryController {
     @Autowired
     private com.example.leafquery.service.AnnouncementService announcementService;
 
-    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./vue-frontend/public/images/uploads}")
+    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:./user-frontend/public/images/uploads}")
     private String uploadDirPath;
 
     // ========== 系统公告 ==========

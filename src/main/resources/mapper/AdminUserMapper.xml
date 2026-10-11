@@ -38,6 +38,11 @@
         UPDATE admin_user SET last_login_at = NOW() WHERE admin_id = #{adminId}
     </update>
 
+    <update id="updatePasswordIfUnchanged">
+        UPDATE admin_user SET password = #{password}
+        WHERE admin_id = #{adminId} AND BINARY password = BINARY #{expectedPassword}
+    </update>
+
     <select id="countAll" resultType="int">
         SELECT COUNT(*) FROM admin_user
     </select>

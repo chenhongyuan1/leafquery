@@ -2,6 +2,7 @@ package com.example.leafquery.mapper;
 
 import com.example.leafquery.entity.AdminUser;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 @Mapper
@@ -20,6 +21,10 @@ public interface AdminUserMapper {
     int deleteById(Long adminId);
 
     int updateLastLogin(Long adminId);
+
+    int updatePasswordIfUnchanged(@Param("adminId") Long adminId,
+                                  @Param("expectedPassword") String expectedPassword,
+                                  @Param("password") String password);
 
     int countAll();
 }

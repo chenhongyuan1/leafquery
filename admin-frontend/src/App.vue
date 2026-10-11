@@ -24,8 +24,12 @@ const menuItems = computed(() => {
   return items
 })
 
-function logout() {
-  store.logout()
+async function logout() {
+  try {
+    await store.logout()
+  } catch {
+    // 本地登录信息已在 finally 中清除；服务不可用时也能退出页面。
+  }
   router.push('/login')
 }
 </script>

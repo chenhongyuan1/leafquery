@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import api from '../api.js'
 
 export const useAdminStore = defineStore('admin', () => {
   const admin = ref(null)
 
-  // 初始化时从 localStorage 恢复
-  const saved = localStorage.getItem('admin')
-  if (saved) {
+  // 旧的本地角色信息不再代表登录；令牌与展示信息只保存在当前标签页。
+  localStorage.removeItem('admin')
+  const saved = sessionStorage.getItem('admin')
+  if (saved && sessionStorage.getItem('admin_token')) {
     try { admin.value = JSON.parse(saved) } catch (e) { /* ignore */ }
   }
 
@@ -15,14 +17,21 @@ export const useAdminStore = defineStore('admin', () => {
   const adminId = computed(() => admin.value?.adminId)
   const nickname = computed(() => admin.value?.nickname || admin.value?.username || '')
 
-  function login(data) {
+  function login(data, token) {
     admin.value = data
-    localStorage.setItem('admin', JSON.stringify(data))
+    sessionStorage.setItem('admin', JSON.stringify(data))
+    sessionStorage.setItem('admin_token', token)
   }
 
-  function logout() {
-    admin.value = null
-    localStorage.removeItem('admin')
+  async function logout() {
+    try {
+      await api.post('/logout')
+    } finally {
+      admin.value = null
+      sessionStorage.removeItem('admin')
+      sessionStorage.removeItem('admin_token')
+      localStorage.removeItem('admin')
+    }
   }
 
   return { admin, isLoggedIn, isSuperAdmin, adminId, nickname, login, logout }

@@ -34,6 +34,16 @@
         WHERE user_id = #{userId}
     </update>
 
+    <update id="updatePasswordIfUnchanged">
+        UPDATE user SET password = #{password}
+        WHERE user_id = #{userId} AND BINARY password = BINARY #{expectedPassword}
+    </update>
+
+    <delete id="deleteIfPasswordUnchanged">
+        DELETE FROM user
+        WHERE user_id = #{userId} AND BINARY password = BINARY #{expectedPassword}
+    </delete>
+
     <delete id="deleteByUserId">
         DELETE FROM user WHERE user_id = #{userId}
     </delete>

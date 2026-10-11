@@ -34,7 +34,8 @@ build/
 
 ### Python inference runtime ###
 python_service/.venv/
-python_service/__pycache__/
+__pycache__/
+*.py[cod]
 python_service/.ultralytics/
 python_service/Ultralytics/
 
@@ -46,3 +47,5 @@ python_service/Ultralytics/
 /.leafquery-runtime/
 /src/main/resources/application-local.properties
 /src/main/resources/application-*.local.properties
+
+/docs/review
