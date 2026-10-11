@@ -10,16 +10,16 @@ const knowledgeList = ref([])
 const qnaList = ref([])
 const toast = ref('')
 
-// QnA View state
+// 问答视图状态
 const showQnaModal = ref(false)
 const viewingQna = ref(null)
 
-// News CRUD state
+// 资讯增删改查状态
 const showNewsModal = ref(false)
 const editingNews = ref(null)
 const newsForm = ref({ title: '', tag: '', content: '' })
 
-// Knowledge CRUD state
+// 知识增删改查状态
 const showKnowledgeModal = ref(false)
 const editingKnowledge = ref(null)
 const knowledgeForm = ref({ title: '', conditionType: '病害', tag: '', plantId: '', description: '', prevention: '' })
@@ -39,7 +39,7 @@ async function loadQna() {
   if (data.code === 200) qnaList.value = data.data
 }
 
-// --- News CRUD ---
+// --- 资讯管理 ---
 function openCreateNews() {
   editingNews.value = null
   newsForm.value = { title: '', tag: '', content: '' }
@@ -71,7 +71,7 @@ async function deleteNews(id) {
   showToast('资讯已删除'); loadNews()
 }
 
-// --- Knowledge CRUD ---
+// --- 知识管理 ---
 function openCreateKnowledge() {
   editingKnowledge.value = null
   knowledgeForm.value = { title: '', conditionType: '病害', tag: '', plantId: '', description: '', prevention: '' }
@@ -110,7 +110,7 @@ async function deleteKnowledge(id) {
   showToast('知识条目已删除'); loadKnowledge()
 }
 
-// --- QnA Review ---
+// --- 问答审核 ---
 async function reviewQna(postId, status) {
   const action = status === 1 ? '通过' : '拒绝'
   if (!confirm(`确定${action}该帖子？`)) return

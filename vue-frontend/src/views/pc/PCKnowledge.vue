@@ -95,7 +95,7 @@ const getConditionColor = (type) => {
 
 <template>
   <div class="h-full flex flex-col bg-slate-50/50 dark:bg-slate-900/50">
-    <!-- Header Area -->
+    <!-- 头部区域 -->
     <div class="px-8 pt-8 pb-4 shrink-0 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
       <div class="flex justify-between items-end mb-6">
         <div>
@@ -109,7 +109,7 @@ const getConditionColor = (type) => {
         </div>
       </div>
       
-      <!-- Category Tabs -->
+      <!-- 分类标签 -->
       <div class="flex space-x-2">
         <button v-for="(cat, idx) in categories" :key="cat" @click="activeCategory = idx; selectedPlant = null;"
                 class="px-5 py-2.5 rounded-xl font-bold transition-all"
@@ -119,13 +119,13 @@ const getConditionColor = (type) => {
       </div>
     </div>
 
-    <!-- Main Content Area -->
+    <!-- 主内容区 -->
     <div class="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
       <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900/50 backdrop-blur-sm z-10 text-green-500 font-bold">
          数据加载中...
       </div>
       
-      <!-- Plants Grid (Knowledge Root) -->
+      <!-- 植物列表（知识库首页） -->
       <div v-if="activeCategory === 1 && !selectedPlant" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-6">
          <div v-for="plant in currentItems" :key="plant.id" @click="fetchKnowledge(plant.plantId)"
               class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:border-green-300 transition-all p-5 text-center cursor-pointer group">
@@ -137,7 +137,7 @@ const getConditionColor = (type) => {
          </div>
       </div>
 
-      <!-- Knowledge Lib Items -->
+      <!-- 知识库条目 -->
       <div v-else-if="activeCategory === 1 && selectedPlant" class="relative">
          <button @click="selectedPlant = null" class="mb-4 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-bold text-sm tracking-wide flex items-center"><span class="mr-2">←</span> 返回作物列表</button>
          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -155,11 +155,11 @@ const getConditionColor = (type) => {
          </div>
       </div>
 
-      <!-- News & QnA Masonry (Columns) -->
+      <!-- 资讯和问答分栏流 -->
       <div v-else class="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
-         <!-- Force break inside avoid -->
+         <!-- 避免卡片在分栏中被拆开 -->
          <div v-for="item in currentItems" :key="item.id" class="break-inside-avoid">
-             <!-- Using the existing mobile components but they automatically adapt to the column width -->
+             <!-- 继续复用手机端组件，它们会按当前列宽自动适配 -->
              <NewsCard v-if="activeCategory === 0" :item="item" @click="selectedNewsItem = item" class="mb-6 hover:shadow-xl transition-shadow cursor-pointer border border-slate-100 dark:border-slate-800" />
              <QnACard v-else-if="activeCategory === 2" :item="item" @click="selectedQnaItem = item" class="mb-6 hover:shadow-xl transition-shadow cursor-pointer border border-slate-100 dark:border-slate-800" />
          </div>
@@ -170,18 +170,18 @@ const getConditionColor = (type) => {
       </div>
     </div>
 
-    <!-- ================= MODALS ================= -->
-    <!-- Library Detail Modal -->
+    <!-- ================= 弹窗区域 ================= -->
+    <!-- 知识库详情弹窗 -->
     <div v-if="selectedLibraryItem" class="fixed inset-0 z-50 flex items-center justify-center p-8">
        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="selectedLibraryItem = null"></div>
        <div class="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-[2rem] shadow-2xl relative z-10 flex flex-col max-h-full overflow-hidden animate-fade-in-up">
           <div class="flex h-full min-h-0">
-             <!-- Left Image -->
+             <!-- 左侧图片 -->
              <div class="w-2/5 shrink-0 bg-slate-100 dark:bg-slate-800 relative">
                <img v-if="selectedLibraryItem.image" :src="selectedLibraryItem.image" class="w-full h-full object-cover" />
                <div class="absolute top-4 left-4 text-xs font-black tracking-widest px-3 py-1.5 rounded-lg text-white shadow-sm" :class="getConditionColor(selectedLibraryItem.conditionType)">{{ selectedLibraryItem.conditionType }}</div>
              </div>
-             <!-- Right Content -->
+             <!-- 右侧内容 -->
              <div class="flex-1 flex flex-col min-h-0">
                 <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between">
                    <div>

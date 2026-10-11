@@ -144,7 +144,7 @@ public class FarmCropService {
             applyPhenologyState(crop, false);
             farmCropMapper.updateCrop(crop);
         } catch (IllegalArgumentException ignored) {
-            // Keep the last known effective stage when a daily refresh cannot complete cleanly.
+            // 当日常刷新无法顺利完成时，保留最后已知的有效物候期。
         }
     }
 

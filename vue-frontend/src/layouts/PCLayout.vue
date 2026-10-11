@@ -19,21 +19,21 @@ import {
   dismissPopupAnnouncement
 } from '../utils/announcementReadState'
 
-// Import PC native components
+// 导入电脑端页面组件
 import PCIntro from '../views/pc/PCIntro.vue'
 import PCWorkspace from '../views/pc/PCWorkspace.vue'
 import PCDataCenter from '../views/pc/PCDataCenterConnected.vue'
 import PCKnowledge from '../views/pc/PCKnowledgeConnected.vue'
 import PCSettings from '../views/pc/PCSettingsConnected.vue'
 
-// Components
+// 导入通用组件
 import ThemeToggle from '../components/common/ThemeToggle.vue'
 import PCNotifications from '../components/pc/PCNotifications.vue'
 
 const favStore = useFavoritesStore()
 const farmStore = useFarmStore()
 
-// ============ Theme ============
+// ============ 主题 ============
 const isDark = ref(false)
 const isThemeTransitioning = ref(false)
 const handleThemeSync = () => {
@@ -96,7 +96,7 @@ const toggleTheme = (origin) => {
   })
 }
 
-// ============ Auth ============
+// ============ 登录与账号 ============
 const currentUser = ref(null)
 const showLoginModal = ref(false)
 const isLoginMode = ref(true)
@@ -108,7 +108,7 @@ const handleAuthChange = () => {
   refreshPopupAnnouncement()
 }
 
-// ==== Popup Announcement ====
+// ==== 弹出公告 ====
 const popupAnnouncement = ref(null)
 
 const refreshPopupAnnouncement = async () => {
@@ -197,7 +197,7 @@ const handleLogout = async () => {
   })
 }
 
-// ============ PC Navigation Tabs ============
+// ============ 电脑端导航页签 ============
 const activeTab = ref('intro')
 
 const enterWorkspace = () => {
@@ -238,11 +238,11 @@ const currentComponent = computed(() => {
 
     <template v-else>
     
-    <!-- LEFT SIDEBAR -->
+    <!-- 左侧边栏 -->
     <aside class="w-64 flex flex-col shrink-0 border-r"
            :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'">
       
-      <!-- Brand Logo -->
+      <!-- 品牌标识 -->
       <div class="h-16 flex items-center px-6 border-b" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
         <div class="flex items-center space-x-2.5 group cursor-pointer" @click="goToIntro">
           <span class="text-2xl group-hover:rotate-12 transition-transform duration-300">🌱</span>
@@ -252,7 +252,7 @@ const currentComponent = computed(() => {
         </div>
       </div>
 
-      <!-- Navigation -->
+      <!-- 导航区 -->
       <nav class="flex-1 px-4 py-6 space-y-2">
         <button v-for="item in navItems" :key="item.id"
                 @click="activeTab = item.id"
@@ -265,7 +265,7 @@ const currentComponent = computed(() => {
         </button>
       </nav>
 
-      <!-- Bottom Profile -->
+      <!-- 底部用户区 -->
       <div class="p-4 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
          <button v-if="!currentUser" @click="showLoginModal = true"
                  class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all">
@@ -286,19 +286,19 @@ const currentComponent = computed(() => {
       </div>
     </aside>
 
-    <!-- RIGHT MAIN CONTENT -->
+    <!-- 右侧主内容区 -->
     <main class="flex-1 flex flex-col overflow-hidden relative">
-      <!-- Topbar Header -->
+      <!-- 顶部栏 -->
       <header class="h-16 flex items-center justify-end border-b px-8 shrink-0"
               :class="isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'">
          <div class="flex items-center space-x-4">
             <PCNotifications :isDark="isDark" />
-            <!-- Theme Toggle -->
+            <!-- 主题切换 -->
              <ThemeToggle :isDark="isDark" :disabled="isThemeTransitioning" @toggle="toggleTheme" />
          </div>
       </header>
       
-      <!-- Component Workspace Area -->
+      <!-- 页面内容区 -->
       <div class="flex-1 overflow-y-auto w-full relative">
         <Transition
           enter-active-class="transition ease-out duration-300"
@@ -315,7 +315,7 @@ const currentComponent = computed(() => {
     </main>
     </template>
 
-    <!-- ============ LOGIN MODAL ============ -->
+    <!-- ============ 登录弹窗 ============ -->
     <Transition
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="opacity-0"
@@ -329,14 +329,14 @@ const currentComponent = computed(() => {
         <div class="relative z-10 w-full max-w-md mx-4 rounded-3xl overflow-hidden shadow-2xl"
              :class="isDark ? 'bg-slate-900' : 'bg-white'">
 
-          <!-- Header -->
+          <!-- 头部 -->
           <div class="bg-gradient-to-br from-green-500 to-emerald-600 px-8 py-8 text-center text-white">
             <div class="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4">🌱</div>
             <h2 class="text-2xl font-extrabold">LeafQuery Workspace</h2>
             <p class="text-green-100 text-sm mt-1">{{ isLoginMode ? '欢迎回来，登录您的工作台账号' : '创建工作台账号' }}</p>
           </div>
 
-          <!-- Form -->
+          <!-- 表单 -->
           <div class="p-8">
             <form @submit.prevent="handleAuthSubmit" class="space-y-4">
               <div
@@ -381,7 +381,7 @@ const currentComponent = computed(() => {
       </div>
     </Transition>
 
-    <!-- ============ POPUP ANNOUNCEMENT MODAL ============ -->
+    <!-- ============ 弹出公告窗 ============ -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0 scale-95"
@@ -393,7 +393,7 @@ const currentComponent = computed(() => {
       <div v-if="popupAnnouncement" class="fixed inset-0 z-[200] flex items-center justify-center px-4">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="dismissPopup"></div>
         <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl flex flex-col z-10 border dark:border-slate-800 border-slate-100">
-          <!-- Banner -->
+          <!-- 顶部横幅 -->
           <div class="bg-gradient-to-br from-indigo-500 to-purple-600 px-6 py-8 flex items-center justify-between z-0 relative overflow-hidden">
             <div class="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')]"></div>
             <div class="relative z-10 pr-2">
@@ -402,11 +402,11 @@ const currentComponent = computed(() => {
             </div>
             <button @click="dismissPopup" class="relative z-10 w-8 h-8 shrink-0 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white font-bold active:scale-90 transition-all border border-white/20">✕</button>
           </div>
-          <!-- Body -->
+          <!-- 内容区 -->
           <div class="p-6 max-h-[40vh] overflow-y-auto">
             <p class="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{{ popupAnnouncement.content }}</p>
           </div>
-          <!-- Action -->
+          <!-- 操作区 -->
           <div class="px-6 py-4 border-t dark:border-slate-800 border-slate-100 bg-slate-50 dark:bg-slate-900/50">
             <button @click="dismissPopup" class="w-full bg-slate-900 dark:bg-green-500 hover:bg-slate-800 dark:hover:bg-green-600 text-white py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all">我知道了</button>
           </div>
@@ -450,7 +450,7 @@ const currentComponent = computed(() => {
   z-index: 20;
 }
 
-/* Smooth scrollbar */
+/* 更顺滑的滚动条 */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }

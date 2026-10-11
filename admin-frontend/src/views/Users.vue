@@ -6,7 +6,7 @@ const users = ref([])
 const search = ref('')
 const loading = ref(true)
 
-// Modal state
+// 模态框状态
 const showModal = ref(false)
 const modalTitle = ref('')
 const form = ref({ userId: null, username: '', password: '', phoneNumber: '', email: '', role: 'user' })
@@ -145,7 +145,7 @@ async function confirmDelete(user) {
       </table>
     </div>
 
-    <!-- 用户表单 Modal -->
+    <!-- 用户表单模态框 -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal">
         <div class="modal-header">

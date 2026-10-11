@@ -31,3 +31,18 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Python inference runtime ###
+python_service/.venv/
+python_service/__pycache__/
+python_service/.ultralytics/
+python_service/Ultralytics/
+
+### Local credentials and runtime ###
+/.env
+/.env.*
+!/.env.example
+!/.env.*.example
+/.leafquery-runtime/
+/src/main/resources/application-local.properties
+/src/main/resources/application-*.local.properties

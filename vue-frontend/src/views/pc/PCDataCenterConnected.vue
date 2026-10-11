@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import { useFarmStore } from '../../stores/farmCloud'
+import { resolveEffectiveStage } from '../../stores/farmUtils'
 import PCFarmManager from '../../components/pc/PCFarmManager.vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -288,7 +289,7 @@ const resolveForecastTarget = () => {
     targetName: selectedTargetName.value,
     regionCode: crop.locationId || '',
     regionLabel: [crop.province, crop.city].filter(Boolean).join(' / ') || crop.region || DEFAULT_REGION_LABEL,
-    stage: crop.stage || ''
+    stage: resolveEffectiveStage(crop)
   }
 }
 
@@ -495,7 +496,7 @@ watch(() => farmStore.activeCrop?.name, async () => {
   await refreshClimate()
 })
 
-watch(() => [farmStore.activeCropId, farmStore.activeCrop?.locationId, farmStore.activeCrop?.stage], () => {
+watch(() => [farmStore.activeCropId, farmStore.activeCrop?.locationId, resolveEffectiveStage(farmStore.activeCrop || {})], () => {
   if (loading.value || targetsLoading.value) return
   void refreshClimate()
 })

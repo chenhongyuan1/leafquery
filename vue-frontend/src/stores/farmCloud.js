@@ -10,6 +10,7 @@ import {
   getFriendlySyncError,
   parseJson,
   getStoredUser,
+  resolveEffectiveStage,
   sanitizeLocation,
   normalizeStageMode
 } from './farmUtils'
@@ -52,8 +53,11 @@ export const useFarmStore = defineStore('farm-cloud', () => {
       const cropId = Number(item.cropId ?? item.id ?? Date.now())
       const cropName = item.cropName ?? item.name ?? '未命名作物'
       const meta = getCropMeta(cropName)
-
       const location = sanitizeLocation(item)
+      const stageMode = normalizeStageMode(
+        item.stageMode,
+        item.estimatedStage ? 'AUTO' : (item.stage ? 'MANUAL' : 'AUTO')
+      )
 
       return {
         id: cropId,
@@ -62,14 +66,18 @@ export const useFarmStore = defineStore('farm-cloud', () => {
         name: cropName,
         cropName,
         icon: item.icon || meta.icon,
-        stage: item.stage || '',
+        stage: resolveEffectiveStage({
+          stage: item.stage,
+          estimatedStage: item.estimatedStage,
+          stageMode
+        }),
         city: item.city || location.city || '',
         region: item.region || location.region || '',
         locationId: String(item.locationId ?? location.id ?? ''),
         province: item.province || location.province || '',
         sowingDate: item.sowingDate || null,
         transplantDate: item.transplantDate || null,
-        stageMode: normalizeStageMode(item.stageMode, item.stage ? 'MANUAL' : 'AUTO'),
+        stageMode,
         estimatedStage: item.estimatedStage || '',
         stageConfidence: item.stageConfidence == null ? null : Number(item.stageConfidence),
         stageReason: item.stageReason || '',
@@ -218,6 +226,11 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     const location = sanitizeLocation(locationData)
     const cropId = Date.now()
     const stageMode = normalizeStageMode(options.stageMode, 'AUTO')
+    const effectiveStage = resolveEffectiveStage({
+      stage: options.stage,
+      estimatedStage: options.estimatedStage,
+      stageMode
+    })
     const nextCrop = {
       id: cropId,
       cropId,
@@ -225,7 +238,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
       name: meta.name,
       cropName: meta.name,
       icon: meta.icon,
-      stage: options.stage || '',
+      stage: effectiveStage,
       city: location.city,
       region: location.region,
       locationId: location.id,
@@ -256,13 +269,22 @@ export const useFarmStore = defineStore('farm-cloud', () => {
   const applyLocalCropUpdate = (cropId, updates, target = 'local') => {
     crops.value = crops.value.map((crop) => {
       if (String(crop.id) !== String(cropId)) return crop
+
+      const nextStageMode = updates.stageMode ? normalizeStageMode(updates.stageMode, crop.stageMode) : crop.stageMode
+      const nextEstimatedStage = updates.estimatedStage ?? crop.estimatedStage
+      const nextStage = resolveEffectiveStage({
+        stage: updates.stage ?? crop.stage,
+        estimatedStage: nextEstimatedStage,
+        stageMode: nextStageMode
+      })
+
       return {
         ...crop,
-        stage: updates.stage ?? crop.stage,
+        stage: nextStage,
         sowingDate: updates.sowingDate ?? crop.sowingDate,
         transplantDate: updates.transplantDate ?? crop.transplantDate,
-        stageMode: updates.stageMode ? normalizeStageMode(updates.stageMode, crop.stageMode) : crop.stageMode,
-        estimatedStage: updates.estimatedStage ?? crop.estimatedStage,
+        stageMode: nextStageMode,
+        estimatedStage: nextEstimatedStage,
         stageConfidence: updates.stageConfidence ?? crop.stageConfidence,
         stageReason: updates.stageReason ?? crop.stageReason,
         stageEvaluatedAt: updates.stageEvaluatedAt ?? crop.stageEvaluatedAt,

@@ -7,7 +7,7 @@ import { useFarmStore } from '../../stores/farmCloud'
 const router = useRouter()
 const farmStore = useFarmStore()
 
-// State
+// 页面状态
 const currentUser = ref(null)
 const activeMenu = ref('profile')
 const recordCount = ref(0)
@@ -52,7 +52,7 @@ const handleLogout = () => {
 
 <template>
   <div class="h-full flex flex-col p-8 bg-slate-50/50 dark:bg-slate-900/50">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="mb-8 shrink-0">
       <h2 class="text-3xl font-black text-slate-800 dark:text-slate-100 tracking-tight">账户中心</h2>
       <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">管理您的个人资料、农场以及系统设置</p>
@@ -60,7 +60,7 @@ const handleLogout = () => {
     
     <div class="flex-1 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 p-8 flex flex-col lg:flex-row gap-12 overflow-hidden">
       
-      <!-- Left Sidebar Menu -->
+      <!-- 左侧菜单 -->
       <div class="w-full lg:w-64 shrink-0 flex flex-col space-y-2 border-b lg:border-b-0 lg:border-r border-slate-100 dark:border-slate-800 pb-8 lg:pb-0 lg:pr-8">
          <button @click="activeMenu = 'profile'"
                  class="text-left py-3 px-5 rounded-xl font-bold transition-colors"
@@ -95,12 +95,12 @@ const handleLogout = () => {
          </div>
       </div>
       
-      <!-- Right Content Area -->
+      <!-- 右侧内容区 -->
       <div class="flex-1 overflow-y-auto custom-scrollbar lg:pr-6">
          
-         <!-- Profile Tab -->
+         <!-- 个人资料页 -->
          <div v-if="activeMenu === 'profile'" class="space-y-8 animate-fade-in">
-            <!-- Avatar Section -->
+            <!-- 头像区域 -->
             <div class="flex items-center space-x-6 bg-slate-50 dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
                <div class="w-24 h-24 rounded-[1.5rem] bg-green-500 flex items-center justify-center text-white text-3xl font-bold overflow-hidden shadow-inner border-4 border-white">
                   <img v-if="currentUser?.avatarUrl" :src="currentUser.avatarUrl" class="w-full h-full object-cover" />
@@ -116,7 +116,7 @@ const handleLogout = () => {
                </div>
             </div>
 
-            <!-- Stats Grid -->
+            <!-- 数据区 -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                   <div class="w-12 h-12 bg-green-50 dark:bg-green-500/10 text-green-500 dark:text-green-400 rounded-xl flex items-center justify-center text-2xl mb-4">🔬</div>
@@ -135,7 +135,7 @@ const handleLogout = () => {
                </div>
             </div>
 
-            <!-- Profile Form -->
+            <!-- 资料表单 -->
             <div class="space-y-6">
                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800 pb-4">基本信息</h3>
                <div class="grid grid-cols-2 gap-6">
@@ -158,7 +158,7 @@ const handleLogout = () => {
             </div>
          </div>
 
-         <!-- Placeholder for other tabs -->
+         <!-- 其他页签占位 -->
          <div v-else class="h-full flex flex-col items-center justify-center text-slate-400 space-y-4 animate-fade-in">
              <div class="text-6xl grayscale opacity-30">🚧</div>
              <h3 class="text-xl font-bold text-slate-500 dark:text-slate-400">模块正在迁移至工作台...</h3>

@@ -1,7 +1,7 @@
 package com.example.leafquery.service;
 
 /**
- * @deprecated Replaced by DetectionSelectionService.
+ * @deprecated 已被 DetectionSelectionService 替代。
  */
 @Deprecated
 public class DetectionTargetCatalogService {

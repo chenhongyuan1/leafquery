@@ -8,17 +8,10 @@ from functools import lru_cache
 
 
 CROP_NAME_ZH = {
-    "alfalfa": "苜蓿",
-    "beet": "甜菜",
-    "cabbage": "甘蓝",
-    "cashew": "腰果",
     "corn": "玉米",
     "maize": "玉米",
-    "mango": "芒果",
     "paddy": "水稻",
-    "peach": "桃",
     "rice": "水稻",
-    "tomato": "番茄",
     "wheat": "小麦",
 }
 

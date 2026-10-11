@@ -31,7 +31,7 @@ const activeIndex = computed(() => {
       </defs>
     </svg>
 
-    <!-- Main Bar Container (The "Liquid" Body) -->
+    <!-- 主导航栏容器（“液体”主体） -->
     <div class="relative h-[80px] w-full pointer-events-auto">
         
         <!-- The Shape Layer (Filtered) -->
@@ -49,7 +49,7 @@ const activeIndex = computed(() => {
             ></div>
         </div>
 
-        <!-- Real Content Layer (Icons, Labels, Green Circle) -->
+        <!-- 真实内容层（图标、标签、绿色圆圈） -->
         <div class="absolute inset-0 w-full h-full z-20">
             
             <!-- Active Green Circle -->
@@ -61,7 +61,7 @@ const activeIndex = computed(() => {
                }"
             ></div>
 
-            <!-- Tab Buttons Container -->
+            <!-- 标签按钮容器 -->
             <div class="w-full h-full flex items-end">
                 <button 
                   v-for="(tab, index) in tabs" 
@@ -76,28 +76,28 @@ const activeIndex = computed(() => {
                      class="absolute z-30 transition-all duration-500 cubic-bezier-spring"
                      :class="activeIndex === index ? 'bottom-[44px] text-white' : 'bottom-[32px] text-slate-400 dark:text-slate-500'"
                    >
-                      <!-- CAMERA -->
+                      <!-- 相机 -->
                       <svg v-if="tab.type === 'camera'" viewBox="0 0 24 24" class="w-6 h-6">
                          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                          <circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2" :class="activeIndex === index ? 'animate-lens' : ''" />
                          <circle cx="12" cy="13" r="1.5" fill="currentColor" class="opacity-0 transition-opacity duration-300 delay-200" :class="activeIndex === index ? 'opacity-100' : 'opacity-0'" />
                       </svg>
                       
-                      <!-- COMPASS -->
+                      <!-- 发现 -->
                       <svg v-if="tab.type === 'compass'" viewBox="0 0 24 24" class="w-6 h-6">
                          <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
                          <path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z" fill="currentColor" stroke="none" class="origin-center transition-transform duration-700 ease-elastic" :class="activeIndex === index ? 'rotate-[360deg]' : 'rotate-0'" />
                          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" fill="currentColor" opacity="0.2" />
                       </svg>
                       
-                      <!-- CHART -->
+                      <!-- 图表 -->
                       <svg v-if="tab.type === 'chart'" viewBox="0 0 24 24" class="w-6 h-6">
                          <rect x="18" y="10" width="4" height="10" rx="1" fill="currentColor" class="transition-all duration-300 delay-75 origin-bottom" :class="activeIndex === index ? 'scale-y-100 opacity-100' : 'scale-y-75 opacity-50'" />
                          <rect x="10" y="5" width="4" height="15" rx="1" fill="currentColor" class="transition-all duration-300 delay-150 origin-bottom" :class="activeIndex === index ? 'scale-y-100 opacity-100' : 'scale-y-75 opacity-50'" />
                          <rect x="2" y="14" width="4" height="6" rx="1" fill="currentColor" class="transition-all duration-300 delay-225 origin-bottom" :class="activeIndex === index ? 'scale-y-100 opacity-100' : 'scale-y-75 opacity-50'" />
                       </svg>
                       
-                      <!-- USER -->
+                      <!-- 用户 -->
                       <svg v-if="tab.type === 'user'" viewBox="0 0 24 24" class="w-6 h-6">
                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                          <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" class="origin-bottom transition-transform duration-500 ease-in-out" :class="activeIndex === index ? 'rotate-12 translate-y-[-2px]' : 'rotate-0 translate-y-0'" />
@@ -105,7 +105,7 @@ const activeIndex = computed(() => {
                       </svg>
                    </div>
                    
-                   <!-- Label -->
+                   <!-- 标签 -->
                    <span 
                       class="text-[10px] font-bold tracking-wide transition-all duration-300 transform block"
                       :class="activeIndex === index ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0 text-slate-500 dark:text-slate-400'"
@@ -122,7 +122,7 @@ const activeIndex = computed(() => {
 <style scoped>
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
 
-/* The magic Gooey Filter class */
+/* 魔法粘稠滤镜样式类 */
 .filter-goo {
   filter: url('#goo');
   -webkit-filter: url('#goo');
@@ -134,7 +134,7 @@ const activeIndex = computed(() => {
   transition-timing-function: cubic-bezier(0.5, 1.2, 0.5, 1);
 }
 
-/* Optimized Keyframes */
+/* 优化的关键帧动画 */
 @keyframes lens {
   0% { transform: scale(1); stroke-width: 2; }
   50% { transform: scale(0.8); stroke-width: 3; }

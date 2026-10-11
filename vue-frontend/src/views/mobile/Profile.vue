@@ -27,7 +27,7 @@ const handleMenuClick = (item) => {
   if (item.route) {
     router.push(item.route)
   } else {
-    // Other items placeholder
+    // 其他项目先保留占位
     console.log('Clicked', item.label)
   }
 }
@@ -88,7 +88,7 @@ const isLoginMode = ref(true)
 const isLoading = ref(false)
 const errorMessage = ref('')
 
-// Scroll locking using Javascript to avoid layout thrashing during animation
+// 用脚本锁定滚动，避免动画时页面来回抖动
 watch(showAuthOverlay, (val) => {
   const container = document.querySelector('.overflow-y-auto.scrollbar-hide')
   if (container) {
@@ -269,18 +269,18 @@ const handleLogout = async () => {
   <div class="profile-page min-h-full lg:min-h-screen pb-8 lg:pb-12 bg-slate-50 dark:bg-slate-950 relative overflow-hidden lg:flex lg:flex-col lg:items-center transition-colors">
     
     <div class="w-full lg:max-w-6xl lg:grid lg:grid-cols-12 lg:gap-8 lg:px-8 lg:mt-12">
-      <!-- Immersive Header (Mobile) / Profile Card (PC) -->
+      <!-- 沉浸式头图（手机）/ 资料卡片（电脑） -->
       <div class="profile-hero-shell lg:col-span-4 lg:bg-white dark:lg:bg-slate-900 lg:rounded-3xl lg:shadow-xl dark:lg:shadow-[0_18px_50px_rgba(2,6,23,0.4)] lg:overflow-hidden lg:h-max lg:border lg:border-slate-100 dark:lg:border-slate-800 relative group transition-colors">
         <div 
           class="relative transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] origin-top overflow-hidden w-full lg:rounded-none"
           :class="showAuthOverlay ? 'h-[100vh] rounded-none z-50 lg:h-[600px] lg:rounded-2xl' : 'h-80 lg:h-auto lg:py-16 rounded-b-[3rem] shadow-2xl shadow-green-900/20 lg:shadow-none z-10'"
         >
-          <!-- Background Gradients -->
+          <!-- 背景渐变 -->
           <div class="absolute inset-0 bg-gradient-to-br from-green-600 to-emerald-800 dark:from-slate-950 dark:via-emerald-950 dark:to-slate-900 transition-colors duration-700"></div>
           <div class="absolute -bottom-20 -right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-110" :class="showAuthOverlay ? 'scale-150' : ''"></div>
           <div class="absolute top-10 left-10 w-40 h-40 bg-yellow-300/20 rounded-full blur-2xl transition-transform duration-700 group-hover:scale-110" :class="showAuthOverlay ? 'scale-[2]' : ''"></div>
       
-          <!-- DEFAULT PROFILE HEADER CONTENT (Only visible when NOT in Auth Mode) -->
+          <!-- 默认头部内容（未进入登录注册时显示） -->
           <transition
             enter-active-class="transition duration-500 ease-out delay-200"
             enter-from-class="opacity-0 -translate-y-8"
@@ -350,7 +350,7 @@ const handleLogout = async () => {
             </div>
           </transition>
 
-          <!-- AUTH FORM OVERLAY CONTENT (Only visible when Auth Mode IS active) -->
+          <!-- 登录注册遮罩内容（进入登录注册时显示） -->
           <transition
             enter-active-class="transition duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] delay-100"
             enter-from-class="opacity-0 translate-y-12"
@@ -470,12 +470,12 @@ const handleLogout = async () => {
               </div>
             </div>
           </transition>
-        </div> <!-- Close immersive header transition container -->
-      </div> <!-- Close col-span-4 -->
+        </div> <!-- 头图过渡容器结束 -->
+      </div> <!-- 左侧四列区域结束 -->
 
-      <!-- Right Content Area (PC) -->
+      <!-- 右侧内容区（电脑） -->
       <div class="lg:col-span-8 flex flex-col gap-6 lg:gap-8 lg:mt-0 relative z-20">
-        <!-- Stats Card (Floating Overlap on mobile, Normal Grid on PC) -->
+        <!-- 数据卡片（手机端悬浮叠放，电脑端正常排布） -->
         <transition
           enter-active-class="transition duration-500 ease-out delay-300"
           enter-from-class="opacity-0 translate-y-8"
@@ -502,7 +502,7 @@ const handleLogout = async () => {
           </div>
         </transition>
 
-        <!-- Menu List -->
+        <!-- 菜单列表 -->
         <transition
           enter-active-class="transition duration-500 ease-out delay-300"
           enter-from-class="opacity-0 translate-y-8"
@@ -541,8 +541,8 @@ const handleLogout = async () => {
             </button>
           </div>
         </transition>
-      </div> <!-- End Right Content Area -->
-    </div> <!-- End Grid Container -->
+      </div> <!-- 右侧内容区结束 -->
+    </div> <!-- 网格容器结束 -->
   </div>
 </template>
 
@@ -558,8 +558,8 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 .custom-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;  /* 微软浏览器 */
+  scrollbar-width: none;  /* 火狐浏览器 */
 }
 
 :global(.dark .profile-page) {

@@ -231,9 +231,9 @@ const handleLogout = async () => {
 <template>
   <div class="settings-page px-4 pt-1 pb-12 min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col relative selection:bg-transparent transition-colors">
     
-    <!-- Toast Placeholder (Would use global store in real app) -->
+    <!-- 提示占位（正式接入时可放到全局状态） -->
     
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="settings-header flex items-center mb-6 pt-4 sticky top-0 z-10 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md pb-4 transition-colors">
       <button @click="goBack" class="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 rounded-full shadow-sm dark:shadow-[0_10px_24px_rgba(2,6,23,0.35)] text-slate-600 dark:text-slate-300 active:scale-90 transition-transform relative z-10">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
@@ -255,7 +255,7 @@ const handleLogout = async () => {
 
     <div class="settings-scroll flex-1 overflow-y-auto custom-scrollbar -mx-4 px-4 pb-20 space-y-6">
 
-      <!-- Section: 账号与安全 -->
+      <!-- 分区：账号与安全 -->
       <div v-show="isUserLoggedIn" v-motion-slide-visible-once-bottom :delay="50">
         <h3 class="text-xs font-bold text-slate-400 pl-4 mb-2 tracking-widest uppercase">账号与安全</h3>
         <div class="settings-card bg-white dark:bg-slate-900 rounded-3xl p-2 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 overflow-hidden flex flex-col justify-center transition-colors">
@@ -271,12 +271,12 @@ const handleLogout = async () => {
         </div>
       </div>
 
-      <!-- Section: 通用偏好 -->
+      <!-- 分区：通用偏好 -->
       <div v-motion-slide-visible-once-bottom :delay="100">
         <h3 class="text-xs font-bold text-slate-400 pl-4 mb-2 tracking-widest uppercase">设备与交互</h3>
         <div class="settings-card bg-white dark:bg-slate-900 rounded-3xl p-2 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-[0_18px_40px_rgba(2,6,23,0.28)] border border-slate-50 dark:border-slate-800 overflow-hidden transition-colors">
           
-          <!-- 方言设置 (Dialect) -->
+          <!-- 方言设置 -->
           <button @click="showDialectSheet = true" class="w-full h-14 flex items-center justify-between px-4 active:bg-slate-50 transition-colors">
             <div class="flex items-center">
               <span class="text-xl mr-3 opacity-50">🗣️</span>
@@ -324,7 +324,7 @@ const handleLogout = async () => {
 
     </div>
 
-    <!-- 方言选择 Bottom Sheet -->
+    <!-- 方言选择底部弹层 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -334,10 +334,10 @@ const handleLogout = async () => {
       leave-to-class="opacity-0"
     >
       <div v-if="showDialectSheet" class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
-        <!-- Backdrop -->
+        <!-- 遮罩层 -->
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="showDialectSheet = false"></div>
         
-        <!-- Sheet Content -->
+        <!-- 弹层内容 -->
         <Transition
           enter-active-class="transition duration-300 ease-out"
           enter-from-class="translate-y-full sm:translate-y-4 sm:opacity-0"
@@ -371,7 +371,7 @@ const handleLogout = async () => {
       </div>
     </Transition>
 
-    <!-- 语言切换 Bottom Sheet -->
+    <!-- 语言切换底部弹层 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -381,10 +381,10 @@ const handleLogout = async () => {
       leave-to-class="opacity-0"
     >
       <div v-if="showLanguageSheet" class="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
-        <!-- Backdrop -->
+        <!-- 遮罩层 -->
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="showLanguageSheet = false"></div>
         
-        <!-- Sheet Content -->
+        <!-- 弹层内容 -->
         <Transition
           enter-active-class="transition duration-300 ease-out"
           enter-from-class="translate-y-full sm:translate-y-4 sm:opacity-0"

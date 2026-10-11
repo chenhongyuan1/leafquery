@@ -29,7 +29,7 @@ const toggleCategory = (value) => {
 }
 const hasSelection = computed(() => selectedCategories.value.length > 0)
 
-// ===== State =====
+// ===== 页面状态 =====
 const isDragging = ref(false)
 const isScanning = ref(false)
 const errorMsg = ref('')
@@ -61,16 +61,16 @@ const deletingId = ref(null)
 const isClearing = ref(false)
 
 // ==== 动画阶段 ====
-const analysisStage = ref('')  // '' -> 'yolo' -> 'review' -> 'done'
+const analysisStage = ref('')  // 空 -> 首轮识别 -> 二次复核 -> 完成
 
-// ==== Chat State ====
+// ==== 对话状态 ====
 const messages = ref([])
 const userInput = ref('')
 const isSending = ref(false)
 const chatContainer = ref(null)
 const farmStore = useFarmStore()
 
-// ====== Chat Image logic ======
+// ====== 聊天图片逻辑 ======
 const imageInputRef = ref(null)
 const pendingImage = ref('')
 const pendingImageBase64 = ref('')
@@ -172,7 +172,7 @@ const clearAllRecords = async () => {
 }
 
 
-// ===== Drag & Drop Logic =====
+// ===== 拖拽和文件选择逻辑 =====
 const triggerUpload = () => {
   if (!hasSelection.value) {
     errorMsg.value = '请先选择至少一个检测类别'
@@ -324,7 +324,7 @@ const generateReport = async () => {
       params.append('reviewResult', detectionResult.value.reviewResult)
     }
 
-    const response = await axios.post('/api/pest/diagnose', params, { timeout: 120000 })
+    const response = await axios.post('/api/pest/diagnose', params, { timeout: 300000 })
     const report = response.data.report || ''
 
     detectionResult.value.report = report
@@ -342,7 +342,7 @@ const generateReport = async () => {
   }
 }
 
-// ==== Chat Logic ====
+// ==== 对话逻辑 ====
 const sendMessage = async () => {
   if (!(userInput.value.trim() || pendingImage.value) || isSending.value) return
   const text = userInput.value.trim()
@@ -380,7 +380,7 @@ const scrollToBottom = () => {
   })
 }
 
-// ==== Helpers ====
+// ==== 辅助方法 ====
 const renderMarkdown = (text) => {
   if (!text) return ''
   let html = text
@@ -396,19 +396,19 @@ const renderMarkdown = (text) => {
 
 <template>
   <div class="p-8 h-full flex flex-col">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="mb-6">
       <h2 class="text-3xl font-black text-slate-800 dark:text-slate-100 tracking-tight">智能诊断工作台</h2>
       <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">利用核心 CV 引擎与 Dify 专家知识库，快速锁定作物病虫害。</p>
     </div>
 
-    <!-- Workspace -->
+    <!-- 工作区 -->
     <div class="flex-1 flex gap-8 min-h-0">
 
-      <!-- LEFT PANE: Category Selection + Upload + History -->
+      <!-- 左侧区域：类别选择、上传和历史记录 -->
       <div class="w-1/2 flex flex-col gap-5">
 
-        <!-- Category Selection Panel -->
+        <!-- 类别选择面板 -->
         <div class="shrink-0 rounded-[2rem] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-6 transition-all"
              :class="hasSelection ? 'ring-2 ring-emerald-400/40 border-emerald-300 dark:border-emerald-500/30' : ''">
           <div class="flex items-center gap-2 mb-4">
@@ -417,7 +417,7 @@ const renderMarkdown = (text) => {
             <span v-else class="ml-auto text-xs font-bold text-emerald-500">已选 {{ selectedCategories.length }} 项</span>
           </div>
 
-          <!-- Disease options -->
+          <!-- 病害选项 -->
           <div class="mb-3">
             <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">作物与病害</div>
             <div class="flex flex-wrap gap-2">
@@ -436,7 +436,7 @@ const renderMarkdown = (text) => {
             </div>
           </div>
 
-          <!-- Pest options -->
+          <!-- 虫害选项 -->
           <div>
             <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">虫害检测</div>
             <div class="flex flex-wrap gap-2">
@@ -456,7 +456,7 @@ const renderMarkdown = (text) => {
           </div>
         </div>
 
-        <!-- Dropzone -->
+        <!-- 上传区域 -->
         <div
           @dragover="onDragOver"
           @dragleave="onDragLeave"
@@ -471,11 +471,11 @@ const renderMarkdown = (text) => {
         >
           <input type="file" ref="fileInput" accept="image/*" class="hidden" @change="onFileSelected" />
 
-          <!-- Scanning states -->
+          <!-- 扫描中的状态 -->
           <template v-if="isScanning">
             <img v-if="previewUrl" :src="previewUrl" class="absolute inset-0 w-full h-full object-cover opacity-20 blur-[2px]" />
             <div class="relative z-10 flex flex-col items-center">
-              <!-- YOLO stage -->
+              <!-- 首轮识别阶段 -->
               <div v-if="analysisStage === 'yolo'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 relative mb-3">
                   <div class="absolute inset-0 border-4 border-emerald-200 rounded-full dark:border-emerald-800"></div>
@@ -485,7 +485,7 @@ const renderMarkdown = (text) => {
                 <span class="text-xs text-slate-400 mt-1">正在扫描图像中的病虫害特征</span>
               </div>
 
-              <!-- Vision review stage -->
+              <!-- 二次复核阶段 -->
               <div v-else-if="analysisStage === 'review'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 relative mb-3">
                   <div class="absolute inset-0 border-4 border-amber-200 rounded-full dark:border-amber-800"></div>
@@ -495,7 +495,7 @@ const renderMarkdown = (text) => {
                 <span class="text-xs text-slate-400 mt-1">大模型正在对图像进行深度分析</span>
               </div>
 
-              <!-- Done stage -->
+              <!-- 完成阶段 -->
               <div v-else-if="analysisStage === 'done'" class="flex flex-col items-center animate-fadeIn">
                 <div class="w-16 h-16 bg-emerald-100 dark:bg-emerald-500/15 rounded-full flex items-center justify-center mb-3">
                   <span class="text-3xl">✓</span>
@@ -505,7 +505,7 @@ const renderMarkdown = (text) => {
             </div>
           </template>
 
-          <!-- Idle upload state -->
+          <!-- 待上传状态 -->
           <template v-else>
             <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4 transition-transform group-hover:scale-110 shadow-sm border border-slate-200 dark:border-slate-700">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8 text-slate-400 dark:text-slate-500">
@@ -521,7 +521,7 @@ const renderMarkdown = (text) => {
           提示：{{ errorMsg }}
         </div>
 
-        <!-- History Strip -->
+        <!-- 历史记录栏 -->
         <div class="flex-1 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 flex flex-col min-h-0 overflow-hidden relative">
            <div class="flex items-center justify-between mb-4">
              <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg flex items-center"><span class="mr-2">🕓</span> 识别记录</h3>
@@ -564,7 +564,7 @@ const renderMarkdown = (text) => {
         </div>
       </div>
 
-      <!-- RIGHT PANE: Result & Chat -->
+      <!-- 右侧区域：结果和对话 -->
       <div class="w-1/2 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col overflow-hidden relative">
          <template v-if="!isResultReady">
             <div class="flex-1 flex flex-col items-center justify-center bg-slate-50/50 text-slate-300 dark:bg-slate-900/50 dark:text-slate-600">
@@ -575,10 +575,10 @@ const renderMarkdown = (text) => {
          </template>
 
          <template v-else>
-            <!-- Result Header -->
+            <!-- 结果头部 -->
             <div class="shrink-0 p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
 
-              <!-- Result summary -->
+              <!-- 结果摘要 -->
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-4">
                   <div class="w-14 h-14 rounded-2xl overflow-hidden shadow-md">
@@ -610,7 +610,7 @@ const renderMarkdown = (text) => {
                 </div>
               </div>
 
-              <!-- YOLO detection details -->
+              <!-- 首轮识别详情 -->
               <div v-if="yoloUsed && summaryItems.length" class="mt-4 grid gap-2 xl:grid-cols-2">
                 <div
                   v-for="item in summaryItems"
@@ -627,7 +627,7 @@ const renderMarkdown = (text) => {
                 </div>
               </div>
 
-              <!-- Review result -->
+              <!-- 复核结果 -->
               <div v-if="detectionResult?.reviewResult" class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/80 dark:border-emerald-500/20 dark:bg-emerald-500/5 p-4">
                 <div class="flex items-center gap-2 mb-2">
                   <span class="text-base">🔍</span>
@@ -636,13 +636,13 @@ const renderMarkdown = (text) => {
                 <div class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
               </div>
 
-              <!-- Review unavailable -->
+              <!-- 暂无复核结果 -->
               <div v-else-if="reviewRequired" class="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/5 px-4 py-3 flex items-center gap-2">
                 <span class="text-base">⚠</span>
                 <span class="text-xs font-bold text-amber-700 dark:text-amber-300">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
               </div>
 
-              <!-- Generate report -->
+              <!-- 生成报告 -->
               <button 
                 v-if="!detectionResult?.report"
                 @click="generateReport" 
@@ -664,11 +664,11 @@ const renderMarkdown = (text) => {
               </button>
             </div>
 
-            <!-- Chat Area -->
+            <!-- 对话区 -->
             <div ref="chatContainer" class="custom-scrollbar flex-1 overflow-y-auto bg-slate-50/30 p-6 space-y-6 dark:bg-slate-950/[0.55]">
                <div v-for="(msg, index) in messages" :key="index" class="flex w-full" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
 
-                 <!-- AI Message -->
+                 <!-- 助手消息 -->
                  <div v-if="msg.role === 'assistant'" class="flex items-start space-x-3 max-w-[90%]">
                    <div class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
                    <div class="rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -676,7 +676,7 @@ const renderMarkdown = (text) => {
                    </div>
                  </div>
 
-                 <!-- User Message -->
+                 <!-- 用户消息 -->
                  <div v-else class="flex items-end space-x-2 max-w-[80%]">
                    <div class="bg-green-500 text-white rounded-2xl rounded-br-sm shadow-md overflow-hidden">
                      <div class="p-1">
@@ -689,7 +689,7 @@ const renderMarkdown = (text) => {
                  </div>
                </div>
 
-               <!-- Sending Animation -->
+               <!-- 发送中动画 -->
                <div v-if="isSending" class="flex items-start space-x-3 max-w-[90%]">
                  <div class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
                  <div class="flex space-x-1 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -700,7 +700,7 @@ const renderMarkdown = (text) => {
                </div>
             </div>
 
-            <!-- Input Area -->
+            <!-- 输入区 -->
             <div class="shrink-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 relative flex flex-col">
                <div v-if="pendingImage" class="mb-3 relative w-16 h-16 ml-2">
                  <img :src="pendingImage" class="w-full h-full object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm" />

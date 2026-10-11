@@ -10,7 +10,7 @@ const goBack = () => {
 
 <template>
   <div class="about-page min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 py-4">
       <button @click="goBack" class="p-2 -ml-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all outline-none">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -18,14 +18,14 @@ const goBack = () => {
         </svg>
       </button>
       <h1 class="text-lg font-extrabold text-slate-800 tracking-wide">关于我们</h1>
-      <div class="w-10"></div> <!-- Placeholder to center title -->
+      <div class="w-10"></div> <!-- 占位，用来让标题居中 -->
     </div>
 
-    <!-- Background Decoration -->
+    <!-- 背景装饰 -->
     <div class="absolute top-0 right-0 w-64 h-64 bg-green-100/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
     <div class="flex-1 flex flex-col pt-12 pb-24 px-6 relative z-10">
-      <!-- App Header Icon -->
+      <!-- 应用图标 -->
       <div class="flex flex-col items-center justify-center mb-10 text-center" v-motion-slide-visible-once-bottom>
         <div class="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 text-white rounded-[2rem] shadow-xl shadow-green-900/20 flex items-center justify-center text-5xl mb-6 transform rotate-3 hover:rotate-0 transition-transform cursor-default">
           🌱
@@ -34,7 +34,7 @@ const goBack = () => {
         <span class="text-sm font-bold text-green-600 mt-2 bg-green-50 px-3 py-1 rounded-full">v1.0.0 • 叶小问大模型版</span>
       </div>
 
-      <!-- Introduction Section -->
+      <!-- 介绍部分 -->
       <div class="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-8" v-motion-slide-visible-once-bottom :delay="100">
         <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center">
           <span class="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mr-3 text-sm font-black">1</span>
@@ -45,7 +45,7 @@ const goBack = () => {
         </p>
       </div>
 
-      <!-- Tech Feature Section -->
+      <!-- 功能亮点 -->
       <div class="bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-8" v-motion-slide-visible-once-bottom :delay="200">
         <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center">
           <span class="w-8 h-8 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center mr-3 text-sm font-black">2</span>
@@ -76,7 +76,7 @@ const goBack = () => {
         </ul>
       </div>
 
-      <!-- Copyright / Contact -->
+      <!-- 版权与联系信息 -->
       <div class="mt-8 text-center" v-motion-slide-visible-once-bottom :delay="300">
         <p class="text-xs font-semibold text-slate-400">© 2026 LeafQuery Tech, Inc. All rights reserved.</p>
         <p class="text-[10px] text-slate-400 mt-1">为您提供卓越的农业智能护航</p>
@@ -86,7 +86,7 @@ const goBack = () => {
 </template>
 
 <style scoped>
-/* Hidden scrollbar */
+/* 隐藏滚动条 */
 .overflow-y-auto::-webkit-scrollbar {
   display: none;
 }

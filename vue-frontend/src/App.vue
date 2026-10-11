@@ -17,8 +17,8 @@ const favStore = useFavoritesStore()
 const farmStore = useFarmStore()
 
 const checkDevice = () => {
-    // Check width or user agent.
-    // Usually mobile layout is wanted for anything narrower than a tablet/small laptop
+    // 检查屏幕宽度或 user agent。
+    // 通常比平板/小屏笔记本窄的设备会希望使用移动端布局
     const nextIsMobile = getIsMobileViewport()
     const layoutChanged = nextIsMobile !== isMobile.value
     isMobile.value = nextIsMobile

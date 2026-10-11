@@ -35,7 +35,7 @@ function logout() {
     <router-view />
   </div>
   <div v-else class="admin-layout">
-    <!-- Sidebar -->
+    <!-- 侧边栏 -->
     <aside class="sidebar">
       <div class="sidebar-logo">
         <div class="logo-icon">LQ</div>
@@ -72,7 +72,7 @@ function logout() {
       </div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- 主内容区 -->
     <main class="main-content">
       <router-view />
     </main>

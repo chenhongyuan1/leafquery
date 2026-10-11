@@ -178,7 +178,7 @@ defineExpose({ startScan, isScanning })
   animation: tap 2s ease-in-out infinite;
 }
 
-/* Aurora Background Effect */
+/* 极光背景特效 */
 .bg-aurora {
   background: linear-gradient(-45deg, #020617, #064e3b, #0f172a);
   background-size: 400% 400%;

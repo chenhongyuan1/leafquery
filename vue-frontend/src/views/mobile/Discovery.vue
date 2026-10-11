@@ -13,7 +13,7 @@ const API_BASE = '/api/discovery'
 
 const favStore = useFavoritesStore()
 
-// Categories
+// 分类
 const categories = ['推荐', '知识库', '问答圈']
 const activeCategory = ref(0)
 const searchQuery = ref('')
@@ -23,7 +23,7 @@ const selectedLibraryItem = ref(null)
 const selectedNewsItem = ref(null)
 const selectedQnaItem = ref(null)
 
-// Reactive data stores (populated from API)
+// 页面数据（从接口加载）
 const newsData = ref([])
 const plantsData = ref([])
 const knowledgeData = ref([])
@@ -31,7 +31,7 @@ const qnaData = ref([])
 const likedPostIds = ref(new Set())
 const loading = ref(false)
 
-// Q&A Post State
+// 问答发帖状态
 const postText = ref('')
 const postImages = ref([])
 const fileInput = ref(null)
@@ -59,7 +59,7 @@ const handleAuthChange = () => {
   hydrateDiscoverySession()
 }
 
-// ========== Fetch data from backend on mount ==========
+// ========== 页面加载时从后端取数据 ==========
 const fetchNews = async () => {
   try {
     const { data } = await axios.get(`${API_BASE}/news`)
@@ -142,13 +142,13 @@ const fetchLikedPostIds = async () => {
   } catch (e) { console.error('获取点赞状态失败', e) }
 }
 
-// Utility: safe JSON parse
+// 小工具：安全解析数据文本
 const safeParseJSON = (str) => {
   if (!str) return []
   try { return JSON.parse(str) } catch { return [str] }
 }
 
-// Utility: format timestamp to relative time
+// 小工具：把时间戳转成相对时间
 const formatTime = (ts) => {
   if (!ts) return ''
   const now = new Date()
@@ -164,12 +164,12 @@ const formatTime = (ts) => {
   return date.toLocaleDateString('zh-CN')
 }
 
-// Load all data on component mount
+// 组件加载时拉取全部数据
 onMounted(async () => {
   window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
   await hydrateDiscoverySession()
 
-  // 从收藏页跳转过来时，自动切换到对应 tab
+  // 从收藏页跳转过来时，自动切换到对应标签
   const tabParam = Number(route.query.tab)
   if (!isNaN(tabParam) && tabParam >= 0 && tabParam < categories.length) {
     activeCategory.value = tabParam
@@ -184,7 +184,7 @@ onUnmounted(() => {
   window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange)
 })
 
-// ========== Computed: current items for active tab ==========
+// ========== 当前标签对应的数据 ==========
 const currentItems = computed(() => {
   let items = []
   switch(activeCategory.value) {
@@ -200,7 +200,7 @@ const currentItems = computed(() => {
     default: items = [];
   }
 
-  // Search Filtering
+  // 搜索筛选
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
     items = items.filter(item => {
@@ -228,7 +228,7 @@ const getConditionColor = (conditionType) => {
   }
 }
 
-// ========== Actions ==========
+// ========== 交互方法 ==========
 const openPostModal = () => {
   const user = requireDiscoveryUser('请先登录后再提问！')
   if (!user) return
@@ -316,7 +316,7 @@ const deletePost = async (postId) => {
 
 <template>
   <div class="discovery-page bg-slate-50 dark:bg-slate-950 min-h-full pb-8 transition-colors">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="discovery-header bg-white dark:bg-slate-900/95 px-6 pt-4 pb-2 sticky top-0 z-40 shadow-sm dark:shadow-[0_12px_32px_rgba(2,6,23,0.35)] transition-colors">
       <div class="flex justify-between items-center mb-4 max-w-7xl mx-auto">
         <h1 class="text-3xl font-bold text-slate-900 tracking-tight">发现</h1>
@@ -337,9 +337,9 @@ const deletePost = async (postId) => {
       </div>
     </div>
 
-    <!-- Layout Container -->
+    <!-- 布局容器 -->
     <div class="lg:flex lg:flex-row lg:items-start lg:gap-8 lg:px-6 lg:mt-6 max-w-7xl mx-auto">
-      <!-- Tabs (Sidebar on PC) -->
+      <!-- 分类标签（电脑端显示在侧边） -->
       <div class="discovery-tabs bg-white/95 dark:bg-slate-900/90 backdrop-blur-md px-6 pb-2 lg:p-0 lg:bg-transparent sticky top-[130px] lg:top-[150px] z-30 border-b border-slate-50 dark:border-slate-800 lg:border-none transition-all duration-300 lg:w-48 lg:shrink-0 rounded-2xl">
         <div class="flex lg:flex-col space-x-6 lg:space-x-0 lg:space-y-3 overflow-x-auto scrollbar-hide py-2 lg:py-0">
           <button v-for="(cat, index) in categories" :key="index" @click="{ activeCategory = index; selectedPlant = null; }" class="flex-shrink-0 lg:w-full lg:text-left lg:px-4 lg:py-3 lg:rounded-xl text-sm font-bold transition-all relative pb-2 lg:pb-3 whitespace-nowrap lg:whitespace-normal" :class="activeCategory === index ? 'text-green-600 lg:bg-green-50 lg:scale-[1.02] scale-105' : 'text-slate-400 hover:text-slate-600 lg:hover:bg-slate-100'">
@@ -349,9 +349,9 @@ const deletePost = async (postId) => {
         </div>
       </div>
 
-      <!-- Feed Content -->
+      <!-- 内容区 -->
       <div class="px-4 lg:px-0 py-4 space-y-4 lg:space-y-0 mb-20 min-h-[400px] lg:flex-1">
-        <!-- Loading State -->
+        <!-- 加载中 -->
         <div v-if="loading" class="discovery-loading text-center py-20 text-slate-400 dark:text-slate-500">
           <span class="text-4xl block mb-2 animate-spin">⏳</span>
           <p>加载中...</p>
@@ -365,7 +365,7 @@ const deletePost = async (postId) => {
             'lg:grid-cols-1': activeCategory === 1 && selectedPlant
           }"
         >
-          <!-- Plant List View for Knowledge Base -->
+          <!-- 知识库植物列表 -->
           <template v-if="activeCategory === 1 && !selectedPlant" key="plant-list">
             <div 
                v-for="plant in currentItems" 
@@ -387,7 +387,7 @@ const deletePost = async (postId) => {
             </div>
           </template>
 
-          <!-- Detail Grid layout for Knowledge Base -->
+          <!-- 知识库详情网格 -->
           <div v-else-if="activeCategory === 1 && selectedPlant" key="plant-detail" class="lg:col-span-full">
             <div class="discovery-plant-detail-header flex items-center space-x-3 mb-4">
                <button @click="selectedPlant = null" class="w-8 h-8 flex items-center justify-center bg-slate-200 text-slate-600 rounded-full font-bold lg:hover:bg-slate-300 transition-colors">‹</button>
@@ -400,7 +400,7 @@ const deletePost = async (postId) => {
                 @click="openLibraryDetail(item)"
                 class="discovery-library-card bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-sm dark:shadow-[0_12px_36px_rgba(2,6,23,0.28)] border border-slate-100 dark:border-slate-800 active:scale-95 lg:hover:shadow-lg lg:hover:-translate-y-1 transition-all cursor-pointer group relative"
               >
-                 <!-- Favorite Button (Library Card) -->
+                 <!-- 收藏按钮（知识卡片） -->
                  <button 
                    @click.stop="handleFavoriteToggle(item)"
                    :disabled="favStore.isFavoriteSubmitting"
@@ -426,10 +426,10 @@ const deletePost = async (postId) => {
             </div>
           </div>
 
-          <!-- List layout for Recommendation & QnA -->
+          <!-- 推荐和问答列表 -->
           <template v-else>
             <div v-for="(item, index) in currentItems" :key="item.id" class="relative group cursor-pointer lg:h-full lg:flex lg:flex-col" @click="item.type === 'news' ? selectedNewsItem = item : (item.type === 'qna' ? openQnaDetail(item) : null)">
-               <!-- Favorite Button (News/QnA List Item) -->
+               <!-- 收藏按钮（资讯和问答条目） -->
                <button 
                   @click.stop="handleFavoriteToggle(item)"
                   :disabled="favStore.isFavoriteSubmitting"
@@ -446,7 +446,7 @@ const deletePost = async (postId) => {
           </template>
         </transition-group>
         
-        <!-- Empty State -->
+        <!-- 空状态 -->
         <div v-if="!loading && currentItems.length === 0" class="discovery-empty text-center py-20 text-slate-400 dark:text-slate-500 lg:col-span-full">
            <span class="text-4xl block mb-2">🍃</span>
            <p>暂无相关内容</p>
@@ -454,7 +454,7 @@ const deletePost = async (postId) => {
       </div>
     </div>
 
-    <!-- Library Detail Modal -->
+    <!-- 知识库详情弹窗 -->
     <div v-if="selectedLibraryItem" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="selectedLibraryItem = null"></div>
       <div class="discovery-modal-panel discovery-library-modal bg-white dark:bg-slate-900 w-full sm:w-[90%] lg:w-full lg:max-w-4xl sm:rounded-[2rem] rounded-t-[2rem] h-[80%] sm:h-auto lg:h-[80vh] overflow-hidden relative z-10 shadow-2xl dark:shadow-[0_24px_70px_rgba(2,6,23,0.55)] animate-slide-up flex flex-col transition-colors">
@@ -494,7 +494,7 @@ const deletePost = async (postId) => {
       </div>
     </div>
 
-    <!-- News Detail Modal -->
+    <!-- 资讯详情弹窗 -->
     <div v-if="selectedNewsItem" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="selectedNewsItem = null"></div>
       <div class="discovery-modal-panel discovery-news-modal bg-white dark:bg-slate-900 w-full sm:w-[90%] lg:w-full lg:max-w-3xl sm:rounded-[2rem] rounded-t-[2rem] h-[85%] sm:h-auto lg:h-[85vh] overflow-hidden relative z-10 shadow-2xl dark:shadow-[0_24px_70px_rgba(2,6,23,0.55)] animate-slide-up flex flex-col transition-colors">
@@ -528,7 +528,7 @@ const deletePost = async (postId) => {
       </div>
     </div>
 
-    <!-- Post Modal -->
+    <!-- 发帖弹窗 -->
     <div v-if="isPosting" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="isPosting = false"></div>
       <div class="discovery-modal-panel discovery-post-modal bg-white dark:bg-slate-900 w-full sm:w-[90%] lg:w-full lg:max-w-2xl sm:rounded-[2rem] rounded-t-[2rem] p-6 lg:p-8 pb-24 lg:pb-8 relative z-10 shadow-2xl dark:shadow-[0_24px_70px_rgba(2,6,23,0.55)] animate-slide-up transition-colors">
@@ -552,7 +552,7 @@ const deletePost = async (postId) => {
       </div>
     </div>
 
-    <!-- QnA Detail Modal -->
+    <!-- 问答详情弹窗 -->
     <div v-if="selectedQnaItem" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] transition-opacity" @click="selectedQnaItem = null"></div>
       <div class="discovery-modal-panel discovery-qna-modal bg-slate-50 dark:bg-slate-950 w-full sm:w-[90%] lg:w-full lg:max-w-2xl sm:rounded-[2rem] rounded-t-[2rem] h-[85%] sm:h-auto lg:h-[85vh] lg:max-h-[800px] overflow-hidden relative z-10 shadow-2xl dark:shadow-[0_24px_70px_rgba(2,6,23,0.55)] animate-slide-up flex flex-col transition-colors">

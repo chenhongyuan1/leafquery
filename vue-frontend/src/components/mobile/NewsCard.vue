@@ -11,7 +11,7 @@ defineProps({
 <template>
   <div class="flex h-full flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm transform transition-transform active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_12px_36px_rgba(2,6,23,0.22)]">
     <div class="relative h-32 overflow-hidden bg-slate-200 dark:bg-slate-800">
-        <!-- Image placeholder with gradient -->
+        <!-- 带渐变的图片占位符 -->
        <div class="absolute inset-0 bg-gradient-to-br from-green-100 to-blue-100 dark:from-emerald-900/60 dark:to-sky-900/60"></div>
        <div class="absolute top-2 left-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md">
          {{ tag }}

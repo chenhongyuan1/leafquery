@@ -6,7 +6,7 @@ import TabBar from '../components/mobile/TabBar.vue'
 const route = useRoute()
 const scrollContainer = ref(null)
 
-// Manually reset scroll position for the custom container on route change
+// 当路由改变时，手动重置自定义容器的滚动位置
 watch(() => route.path, () => {
   nextTick(() => {
     if (scrollContainer.value) {
@@ -17,11 +17,11 @@ watch(() => route.path, () => {
 </script>
 
 <template>
-  <!-- Mobile Frame / Container -->
+  <!-- 移动端外壳 / 容器 -->
   <div class="mobile-theme-shell relative w-full h-full max-w-[480px] bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden shadow-2xl dark:shadow-black/40 sm:rounded-[3rem] sm:h-[95vh] sm:border-[8px] sm:border-slate-900 dark:sm:border-slate-700 mx-auto transition-colors">
      
 
-     <!-- Content Area -->
+     <!-- 内容区域 -->
      <div ref="scrollContainer" class="mobile-theme-content flex-1 w-full overflow-y-auto scrollbar-hide relative z-10 bg-slate-50 dark:bg-slate-950 transition-colors" :class="{ 'pb-[100px]': !route.meta.hideTabBar }">
        <RouterView v-slot="{ Component }">
           <transition 
@@ -38,7 +38,7 @@ watch(() => route.path, () => {
        </RouterView>
      </div>
     
-     <!-- TabBar: Absolute Bottom Overlay -->
+     <!-- 底部导航栏：绝对定位覆盖层 -->
      <div v-if="!route.meta.hideTabBar" class="absolute bottom-0 left-0 w-full z-50 transition-all duration-300">
         <TabBar />
      </div>

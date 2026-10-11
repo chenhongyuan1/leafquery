@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmCloud'
@@ -86,7 +86,7 @@ const getEmoji = (name) => {
 
 <template>
   <div class="records-page min-h-full bg-slate-50 flex flex-col relative overflow-y-auto overflow-x-hidden">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 py-4">
       <button @click="goBack" class="p-2 -ml-2 text-slate-400 hover:text-slate-600 active:scale-95 transition-all outline-none">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -108,7 +108,7 @@ const getEmoji = (name) => {
       <div v-else class="w-10"></div>
     </div>
 
-    <!-- Background Decoration -->
+    <!-- 背景装饰 -->
     <div class="absolute top-20 right-0 w-64 h-64 bg-green-100/40 rounded-full blur-3xl translate-x-1/3 pointer-events-none"></div>
     <div class="absolute bottom-20 left-0 w-64 h-64 bg-blue-100/40 rounded-full blur-3xl -translate-x-1/3 pointer-events-none"></div>
 
@@ -146,7 +146,7 @@ const getEmoji = (name) => {
             class="bg-white rounded-[1.5rem] p-4 flex items-center shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-50 transition-colors group"
             :style="{ transitionDelay: `${index * 50}ms` }"
           >
-            <!-- 左侧图片 / Emoji 缩略图 -->
+            <!-- 左侧图片 / 表情缩略图 -->
             <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl overflow-hidden shrink-0 shadow-inner mr-4 relative">
               <img v-if="item.imageUrl && item.imageUrl.trim() !== ''" :src="item.imageUrl" class="w-full h-full object-cover" @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline'" />
               <span v-show="!item.imageUrl || item.imageUrl.trim() === ''">{{ getEmoji(item.name) }}</span>

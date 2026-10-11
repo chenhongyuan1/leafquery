@@ -23,7 +23,7 @@ import {
 const router = useRouter()
 const settingsStore = useSettingsStore()
 
-// ===== Category Selection =====
+// ===== 类别选择 =====
 const categoryOptions = [
   { key: 'rice',   label: '水稻', value: '水稻', icon: '🌾', group: 'disease' },
   { key: 'corn',   label: '玉米', value: '玉米', icon: '🌽', group: 'disease' },
@@ -48,10 +48,10 @@ const confirmSelection = () => {
   }
 }
 
-// ===== Scan State =====
+// ===== 扫描状态 =====
 const fileInput = ref(null)
 const previewUrl = ref(null)
-const analysisStage = ref('')  // '' -> 'yolo' -> 'review' -> 'done'
+const analysisStage = ref('')  // 空 -> 首轮识别 -> 二次复核 -> 完成
 const yoloUsed = ref(false)
 const reviewRequired = ref(false)
 
@@ -67,7 +67,7 @@ const selectedCropNames = ref([])
 const selectedTargetNames = ref([])
 
 
-// TTS 语音播放状态
+// 语音播报状态
 const isSpeaking = ref(false)
 const isTtsLoading = ref(false)
 let currentAudio = null
@@ -79,14 +79,14 @@ const speakLastReply = async () => {
     return
   }
 
-  // 取最后一条 assistant 消息
+  // 取最后一条助手消息
   const lastAssistant = [...messages.value].reverse().find(m => m.role === 'assistant')
   if (!lastAssistant || !lastAssistant.content) {
     showToast('没有可以朗读的内容', 'warning')
     return
   }
 
-  // 移除 Markdown 格式符号，只保留纯文本
+  // 去掉标记符号，只保留纯文本
   const plainText = lastAssistant.content
     .replace(/[#*_`~>\-|]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -173,13 +173,13 @@ const removePendingGeneralImage = () => {
   pendingGeneralImage.value = ''
 }
 
-// 语音转文字 + 方言识别 (Web Audio API PCM 采集 + WAV 编码 -> 后端豆包  SeedASR)
+// 录音转文字并识别方言（采集音频后转成标准音频文件，再交给后端处理）
 const isRecording = ref(false)
 const isAudioProcessing = ref(false)
 
-// Toast 弹窗通知系统
+// 顶部提示系统
 const toastMessage = ref('')
-const toastType = ref('info') // 'info' | 'error' | 'warning'
+const toastType = ref('info') // 信息 | 错误 | 警告
 const toastVisible = ref(false)
 let toastTimer = null
 
@@ -200,16 +200,16 @@ let analyserNode = null
 let animationFrameId = null
 let orbCanvas = null
 let orbCtx = null
-let orbDepth = 0.3 // CodePen 默认值
+let orbDepth = 0.3 // 原示例默认值
 let smoothedDepth = 0.3
 let prevEnergy = 0
 let smoothedEnergy = 0
-let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // sin 波相位
+let orbPhases = { s1: 0, s2: 0, s3: 0, rotation: 0 } // 正弦波相位
 let stream = null
 let pcmBuffers = []
 
-// ============ Organic AI Orb Canvas Renderer (忠实复刻  CodePen 数学公式 ============
-// CodePen 原版的 7 个控制点相位偏移
+// ============ 有机圆球绘制（按原示例的变化规则） ============
+// 原示例里 7 个控制点的相位偏移
 const BLOB_POINTS = [
   { angle: 0, p1: 0, p2: 0, p3: 0 },
   { angle: 51.43, p1: 137.5, p2: 222.5, p3: 360.1 },
@@ -247,14 +247,14 @@ function buildBlobPath(ctx, cx, cy, baseR, depth, phases) {
 
 function drawOrb(ctx, w, h, depth, phases) {
   const cx = w / 2, cy = h / 2
-  // CodePen 原版: transform: scale(calc(1 + var(--depth)))
-  // depth 越大 -> 整体越大  + 形变越剧烈 (向外膨胀  + 不规则震动
+  // 原示例会按深度同步放大
+  // 深度越大，圆球越大，形变也越明显
   const scaleFactor = 0.5 + depth * 0.5
   const baseR = Math.min(w, h) / 2 * 0.85 * scaleFactor
 
   ctx.clearRect(0, 0, w, h)
 
-  // ======== 第 1 层  外发光 Glow (feGaussianBlur 模拟 ========
+  // ======== 第 1 层：外发光 ========
   // 先画一次带大模糊阴影的填充，然后清除实体只保留光晕
   ctx.save()
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
@@ -266,7 +266,7 @@ function drawOrb(ctx, w, h, depth, phases) {
   ctx.fill()
   ctx.restore()
 
-  // ======== 第 2 层  主体填充 (Mesh Gradient) ========
+  // ======== 第 2 层：主体颜色 ========
   buildBlobPath(ctx, cx, cy, baseR, depth, phases)
 
   // 网格渐变填充 (绿色植物主题配色)
@@ -292,8 +292,8 @@ function drawOrb(ctx, w, h, depth, phases) {
   ctx.fillStyle = g2; ctx.fill()
   ctx.fillStyle = g3; ctx.fill()
 
-  // ======== 第 3 层  噪点质感  Film Grain (feTurbulence 模拟 ========
-  // 使用 offscreen canvas 生成噪点，再通过 drawImage 叠加（drawImage 尊重 clip）
+  // ======== 第 3 层：噪点质感 ========
+  // 先在临时画布生成噪点，再叠到主画布上
   if (!drawOrb._grainCanvas) {
     drawOrb._grainCanvas = document.createElement('canvas')
     drawOrb._grainCanvas.width = w
@@ -308,7 +308,7 @@ function drawOrb(ctx, w, h, depth, phases) {
   }
   gc.putImageData(gImg, 0, 0)
   
-  // 在已裁剪的主 canvas 上用 overlay 混合模式绘制噪点
+  // 在裁剪后的主画布上叠加噪点
   ctx.globalCompositeOperation = 'overlay'
   ctx.drawImage(drawOrb._grainCanvas, 0, 0)
 
@@ -318,13 +318,13 @@ function drawOrb(ctx, w, h, depth, phases) {
 function startOrbAnimation(dataArray) {
   const render = () => {
     if (!stream) return
-    // 更新相位 (与 CodePen 一致的速率: 7s, 11s, 13s 周期
+    // 按原示例的节奏更新相位（7 秒、11 秒、13 秒一轮）
     orbPhases.s1 += (2 * Math.PI) / (7 * 60)
     orbPhases.s2 += (2 * Math.PI) / (11 * 60)
     orbPhases.s3 += (2 * Math.PI) / (13 * 60)
     orbPhases.rotation += (2 * Math.PI) / (20 * 60)
 
-    // 音频分析(与 CodePen JS 完全一致的  RMS 能量检测
+    // 分析音量强弱，带动圆球起伏
     if (analyserNode) {
       analyserNode.getByteTimeDomainData(dataArray)
       let sumSq = 0
@@ -354,7 +354,7 @@ function startOrbAnimation(dataArray) {
   render()
 }
 
-// 层 Float32 PCM 样本编码为标准 WAV 文件
+// 把浮点音频样本转成标准音频文件
 const encodeWAV = (samples, sampleRate) => {
   const buffer = new ArrayBuffer(44 + samples.length * 2)
   const view = new DataView(buffer)
@@ -363,16 +363,16 @@ const encodeWAV = (samples, sampleRate) => {
   view.setUint32(4, 36 + samples.length * 2, true)
   writeStr(8, 'WAVE')
   writeStr(12, 'fmt ')
-  view.setUint32(16, 16, true)       // chunk size
-  view.setUint16(20, 1, true)        // PCM format
-  view.setUint16(22, 1, true)        // mono
+  view.setUint32(16, 16, true)       // 数据块长度
+  view.setUint16(20, 1, true)        // 音频格式
+  view.setUint16(22, 1, true)        // 单声道
   view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * 2, true) // byte rate
-  view.setUint16(32, 2, true)        // block align
-  view.setUint16(34, 16, true)       // bits per sample
+  view.setUint32(28, sampleRate * 2, true) // 每秒字节数
+  view.setUint16(32, 2, true)        // 对齐字节数
+  view.setUint16(34, 16, true)       // 每个采样位数
   writeStr(36, 'data')
   view.setUint32(40, samples.length * 2, true)
-  // 写入 16-bit PCM 样本
+  // 写入 16 位音频样本
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]))
     view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
@@ -380,7 +380,7 @@ const encodeWAV = (samples, sampleRate) => {
   return new Blob([buffer], { type: 'audio/wav' })
 }
 
-// 层 48kHz 下采样到  16kHz
+// 把 48000 采样率降到 16000
 const downsample = (buffer, fromRate, toRate) => {
   if (fromRate === toRate) return buffer
   const ratio = fromRate / toRate
@@ -400,7 +400,7 @@ const startRecording = async (target) => {
     audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
     sourceNode = audioContext.createMediaStreamSource(stream)
     
-    // Web Audio Analyzer for Organic Orb Reactivity
+    // 用音量变化带动圆球动画
     analyserNode = audioContext.createAnalyser()
     analyserNode.fftSize = 256
     // 我们主要关注人声频率，设置平滑度让线条更少抖动
@@ -413,7 +413,7 @@ const startRecording = async (target) => {
     prevEnergy = 0
     smoothedEnergy = 0
     
-    // 等待 Vue DOM 更新后获取 Canvas
+    // 等页面节点更新后再拿到画布
     setTimeout(() => {
       orbCanvas = document.getElementById('orb-canvas')
       if (orbCanvas) {
@@ -452,14 +452,14 @@ const stopRecording = async () => {
   if (sourceNode) { sourceNode.disconnect(); sourceNode = null }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
 
-  // 合并所有 PCM buffer
+  // 合并所有录到的音频片段
   const totalLength = pcmBuffers.reduce((acc, b) => acc + b.length, 0)
   const merged = new Float32Array(totalLength)
   let offset = 0
   for (const buf of pcmBuffers) { merged.set(buf, offset); offset += buf.length }
   pcmBuffers = []
 
-  // 下采样到  16kHz 并编码为  WAV
+  // 降到 16000 采样率后再转成音频文件
   const actualRate = audioContext ? audioContext.sampleRate : 16000
   const samples16k = downsample(merged, actualRate, 16000)
   if (audioContext) { audioContext.close(); audioContext = null }
@@ -477,7 +477,7 @@ const stopRecording = async () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     const text = response.data.text || ''
-    // 后端会把错误/状态消息也放进 text 返回，这里先过滤掉这些提示前缀
+    // 后端有时会把提示文字也塞进返回内容，这里先过滤掉前缀
     const backendErrorPrefixes = [
       'application',
       '语音识别失败',
@@ -493,7 +493,7 @@ const stopRecording = async () => {
         userInput.value = (userInput.value + ' ' + text).trim()
       }
     } else {
-      // 所有后端错误/空结果统一走 Toast
+      // 后端报错或没有结果时，都统一弹出提示
       showToast(
         isBackendError ? text : '语音识别失败，请稍后重试',
         isBackendError && text.includes('失败') ? 'error' : 'warning',
@@ -768,7 +768,7 @@ const onScanFileSelected = async (event) => {
 
     const elapsed = Date.now() - analysisStartTime
     
-    // 保证 YOLO 至少闪 800 毫秒才进下一步，防止突兀
+    // 首轮识别动画至少显示 800 毫秒，切换更自然
     if (elapsed < 800) {
       await new Promise(r => setTimeout(r, 800 - elapsed))
     }
@@ -777,7 +777,7 @@ const onScanFileSelected = async (event) => {
       if (analysisStage.value !== 'review') {
         analysisStage.value = 'review'
       }
-      // AI复核保底思考时间（1500毫秒），让业务体感真实，绝不比YOLO短
+      // 二次复核至少停留 1500 毫秒，避免比上一段还短
       await new Promise(r => setTimeout(r, 1500))
     } else {
       const nowElapsed = Date.now() - analysisStartTime
@@ -850,7 +850,7 @@ const generateReport = async () => {
       params.append('reviewResult', detectionResult.value.reviewResult)
     }
 
-    const response = await axios.post('/api/pest/diagnose', params, { timeout: 120000 })
+    const response = await axios.post('/api/pest/diagnose', params, { timeout: 300000 })
     const report = response.data.report || ''
 
     detectionResult.value.report = report
@@ -936,7 +936,7 @@ const scrollToBottom = () => {
   }, 100)
 }
 
-// 简单的 Markdown 渲染（粗略处理标题和列表）
+// 简单渲染富文本标记（粗略处理标题和列表）
 const renderMarkdown = (text) => {
   if (!text) return ''
   let html = text
@@ -948,7 +948,7 @@ const renderMarkdown = (text) => {
   return html
 }
 
-// 历史条目的 emoji  图标
+// 历史条目的表情图标
 const getEmoji = name => {
   if (!name) return '📌'
   if (name.includes('健康')) return '🌿'
@@ -993,7 +993,7 @@ const formatTime = (item) => {
 <template>
   <div class="px-6 pt-4 min-h-full flex flex-col relative">
     
-    <!-- Toast -->
+    <!-- 提示气泡 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0 -translate-y-4"
@@ -1016,7 +1016,7 @@ const formatTime = (item) => {
       </div>
     </Transition>
 
-    <!-- SVG Filter -->
+    <!-- 滤镜定义 -->
     <svg width="0" height="0" style="position:absolute">
       <filter id="orb-glow" x="-100%" y="-100%" width="300%" height="300%">
         <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur" />
@@ -1030,7 +1030,7 @@ const formatTime = (item) => {
       </filter>
     </svg>
 
-    <!-- Recording Overlay -->
+    <!-- 录音遮罩层 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -1053,7 +1053,7 @@ const formatTime = (item) => {
       </div>
     </Transition>
 
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="flex justify-between items-center mb-6">
       <div>
         <h1 class="text-3xl font-bold text-slate-900 tracking-tight" v-motion-slide-visible-once-bottom>识别</h1>
@@ -1065,14 +1065,14 @@ const formatTime = (item) => {
       </button>
     </div>
 
-    <!-- Combined Card Stack Area (Selection + Scan) -->
+    <!-- 卡片叠放区（选择和扫描） -->
     <div class="w-full flex-none mx-auto aspect-[0.95/1] max-w-[34rem] min-h-[22rem] bg-slate-900 rounded-[2rem] shadow-2xl shadow-slate-900/20 overflow-hidden relative border border-slate-800 mb-8 lg:flex-1 lg:max-w-none lg:min-h-[450px] lg:aspect-auto" v-motion-pop-visible-once :delay="200">
       
-      <!-- LAYER 1: Main Scan Area (Bottom Pattern) -->
+      <!-- 第 1 层：主扫描区（底层） -->
       <div class="absolute inset-0 transition-all duration-700 ease-in-out" :class="selectionConfirmed ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-90 pointer-events-none'">
         <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onScanFileSelected" />
 
-        <!-- Scanning Animation -->
+        <!-- 扫描动画 -->
         <div v-if="isAnalyzing" class="absolute inset-0 z-40 flex flex-col items-center justify-center">
           <img v-if="previewUrl" :src="previewUrl" class="absolute inset-0 w-full h-full object-cover opacity-20" />
           <div class="relative z-10 flex flex-col items-center">
@@ -1102,7 +1102,7 @@ const formatTime = (item) => {
           </div>
         </div>
 
-        <!-- Idle State -->
+        <!-- 待操作状态 -->
         <div v-if="!isAnalyzing" class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center cursor-pointer z-40" @click="triggerScan">
           
           <button @click.stop="selectionConfirmed = false" class="absolute top-4 left-4 text-white/80 bg-black/30 px-3 py-1.5 rounded-full text-xs flex items-center gap-1 backdrop-blur-md transition-all z-50">
@@ -1121,7 +1121,7 @@ const formatTime = (item) => {
           </div>
         </div>
 
-        <!-- Aurora background -->
+        <!-- 极光背景 -->
         <div class="absolute inset-0 bg-aurora">
           <div class="absolute top-[0%] left-[0%] w-[50%] h-[50%] bg-emerald-500/30 rounded-full mix-blend-screen filter blur-[60px] animate-blob"></div>
           <div class="absolute bottom-[0%] right-[0%] w-[50%] h-[50%] bg-blue-500/40 rounded-full mix-blend-screen filter blur-[60px] animate-blob animation-delay-2000"></div>
@@ -1129,7 +1129,7 @@ const formatTime = (item) => {
         </div>
       </div>
 
-      <!-- LAYER 2: Category Selection Panel (Top Layer / Card) -->
+      <!-- 第 2 层：类别选择面板（上层卡片） -->
       <Transition
         enter-active-class="transition-all duration-500 ease-out"
         leave-active-class="transition-all duration-500 ease-in"
@@ -1156,7 +1156,7 @@ const formatTime = (item) => {
                   : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-slate-100'"
               >
                 <span class="text-base">{{ opt.icon }}</span>{{ opt.label }}
-                <!-- Checkmark badge -->
+                <!-- 选中角标 -->
                 <div v-if="selectedCategories.includes(opt.value)" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-emerald-500 shadow-md border-2 border-white text-white rounded-full flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
                 </div>
@@ -1175,7 +1175,7 @@ const formatTime = (item) => {
                   : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-slate-100'"
               >
                 <span class="text-base">{{ opt.icon }}</span>{{ opt.label }}
-                <!-- Checkmark badge -->
+                <!-- 选中角标 -->
                 <div v-if="selectedCategories.includes(opt.value)" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-orange-500 shadow-md border-2 border-white text-white rounded-full flex items-center justify-center">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
                 </div>
@@ -1200,7 +1200,7 @@ const formatTime = (item) => {
       </Transition>
     </div>
 
-    <!-- Recent History -->
+    <!-- 最近记录 -->
     <div class="mb-4" v-motion-slide-visible-once-bottom :delay="400">
       <div class="flex justify-between items-center mb-4 px-1">
         <h3 class="font-bold text-slate-800 text-lg">最近记录</h3>
@@ -1231,7 +1231,7 @@ const formatTime = (item) => {
       </div>
     </div>
     
-    <!-- General Chat Input -->
+    <!-- 通用问答输入区 -->
     <div class="mb-24 flex flex-col relative" v-motion-slide-visible-once-bottom :delay="500">
       <div v-if="pendingGeneralImage" class="mb-2 relative w-16 h-16 ml-3">
         <img :src="pendingGeneralImage" class="w-full h-full object-cover rounded border border-slate-200 shadow-sm" />
@@ -1280,7 +1280,7 @@ const formatTime = (item) => {
       </div>
     </div>
     
-    <!-- Result Modal -->
+    <!-- 结果弹窗 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="opacity-0"
@@ -1364,7 +1364,7 @@ const formatTime = (item) => {
                   <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
                 </div>
 
-                <!-- 待复核提示（Dify 复核失败时） -->
+                <!-- 待复核提示（二次复核失败时） -->
                 <div v-else-if="reviewRequired" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-center gap-2">
                   <span class="text-base">⚠</span>
                   <span class="text-xs font-bold text-amber-700">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
@@ -1404,7 +1404,7 @@ const formatTime = (item) => {
               </div>
             </div>
 
-            <!-- Detail View (Chat with Report) -->
+            <!-- 详情视图（报告与对话） -->
             <div v-else class="flex-1 flex flex-col min-h-0">
               <div class="flex items-center justify-between mb-4 pb-4 border-b">
                 <button v-if="detectionResult.pestName !== '通用农业咨询'" @click="showDetail = false" class="text-slate-400 font-bold px-2 py-1 bg-slate-100 rounded-lg text-sm">返回</button>
@@ -1468,7 +1468,7 @@ const formatTime = (item) => {
                 </div>
               </div>
 
-              <!-- Chat input -->
+              <!-- 对话输入区 -->
               <div class="shrink-0 pt-3 mt-1 bg-white border-t border-slate-100 flex flex-col relative w-full">
                 <div v-if="pendingImage" class="mb-2 relative w-16 h-16 ml-3">
                   <img :src="pendingImage" class="w-full h-full object-cover rounded border border-slate-200 shadow-sm" />
@@ -1522,7 +1522,7 @@ const formatTime = (item) => {
       </div>
     </Transition>
 
-    <!-- Popup Announcement Modal -->
+    <!-- 弹出公告窗 -->
     <div v-if="popupAnnouncement" class="fixed inset-0 z-[100] flex items-center justify-center px-6">
       <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="dismissPopup"></div>
       <div class="bg-white w-full max-w-sm rounded-[2rem] overflow-hidden relative z-10 shadow-2xl popup-enter">

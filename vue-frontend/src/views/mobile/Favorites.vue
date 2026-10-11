@@ -61,7 +61,7 @@ const getTagText = (type) => {
 }
 
 const handleUnlike = async (item) => {
-   // Use dedicated removeFavorite (always removes, no toggle ambiguity)
+   // 这里直接调用取消收藏方法，只做删除，避免含义不清
    await favStore.removeFavorite(item)
 }
 
@@ -69,7 +69,7 @@ const handleUnlike = async (item) => {
 
 <template>
   <div class="favorites-page px-4 pt-1 pb-8 min-h-screen flex flex-col relative bg-slate-50">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="flex items-center mb-6 pt-4 sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md pb-4">
       <button @click="goBack" class="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 active:scale-90 transition-transform relative z-10">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
@@ -88,7 +88,7 @@ const handleUnlike = async (item) => {
           class="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 p-4 flex gap-4 active:scale-[0.98] transition-all relative group cursor-pointer"
           @click="handleItemClick(item)"
         >
-          <!-- 取消收藏按钮 (star icon matching Discovery page) -->
+          <!-- 取消收藏按钮（星形样式与发现页保持一致） -->
           <button 
              @click.stop="handleUnlike(item)"
              :disabled="favStore.isFavoriteSubmitting"

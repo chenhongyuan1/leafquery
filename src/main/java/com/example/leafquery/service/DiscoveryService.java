@@ -81,8 +81,8 @@ public class DiscoveryService {
     }
 
     /**
-     * Toggle like for a post by a specific user.
-     * Returns a map with { liked: boolean, likes: int }
+     * 切换指定用户对某个帖子的点赞状态。
+     * 返回一个包含 { liked: boolean, likes: int } 的 Map
      */
     public java.util.Map<String, Object> toggleLike(Long postId, Long userId) {
         java.util.Map<String, Object> result = new java.util.HashMap<>();
@@ -94,7 +94,7 @@ public class DiscoveryService {
             qnaMapper.insertLike(postId, userId);
         }
 
-        // Recompute authoritative like count from qna_like table
+        // 从 qna_like 表重新计算点赞数
         int newCount = qnaMapper.countLikesByPostId(postId);
         qnaMapper.updateLikes(postId, newCount);
 
@@ -104,7 +104,7 @@ public class DiscoveryService {
     }
 
     /**
-     * Get all post IDs that a user has liked.
+     * 获取用户点赞过的所有帖子 ID。
      */
     public java.util.List<Long> getLikedPostIds(Long userId) {
         return qnaMapper.selectLikedPostIdsByUserId(userId);
@@ -113,7 +113,7 @@ public class DiscoveryService {
     public java.util.Map<String, Object> processComment(QnaComment comment) {
         java.util.Map<String, Object> result = new java.util.HashMap<>();
         com.example.leafquery.entity.User user = userMapper.selectByUserId(comment.getUserId());
-        
+
         if (user != null && "expert".equals(user.getRole())) {
             QnaPost post = qnaMapper.selectPostById(comment.getPostId());
             if (post != null && post.getExpertId() == null) {
@@ -125,7 +125,7 @@ public class DiscoveryService {
                 return result;
             }
         }
-        
+
         qnaMapper.insertComment(comment);
         List<QnaComment> all = qnaMapper.selectCommentsByPostId(comment.getPostId());
         result.put("type", "normal_comment");

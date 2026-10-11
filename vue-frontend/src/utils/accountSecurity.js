@@ -18,7 +18,7 @@ export const getStoredUser = () => {
     const raw = localStorage.getItem(USER_STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
   } catch (error) {
-    console.error('Failed to parse stored user', error)
+    console.error('解析存储的用户信息失败', error)
     return null
   }
 }

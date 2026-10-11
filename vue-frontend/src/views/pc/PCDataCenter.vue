@@ -12,7 +12,7 @@ use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipCompo
 const isDark = ref(document.documentElement.classList.contains('dark'))
 let themeObserver = null
 
-// ==== Dashboard Data ====
+// ==== 看板数据 ====
 const recordCount = ref(0)
 const diseaseCount = ref(0)
 const diseaseDistribution = ref([])
@@ -36,7 +36,7 @@ onMounted(async () => {
       historyItems.value = data
       recordCount.value = data.length
 
-      // Build disease distribution
+      // 整理病虫害分布
       const pestMap = {}
       data.forEach(item => {
         const name = item.pestName || '未知'
@@ -46,7 +46,7 @@ onMounted(async () => {
       diseaseCount.value = Object.keys(pestMap).length
       diseaseDistribution.value = Object.entries(pestMap)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10) // Top 10
+        .slice(0, 10) // 前 10 项
         .map(([name, value]) => ({ name, value }))
     }
   } catch (e) { console.error('Data fetch failed', e) }
@@ -56,9 +56,9 @@ onUnmounted(() => {
   themeObserver?.disconnect()
 })
 
-// ==== ECharts Configs ====
+// ==== 图表配置 ====
 
-// 1. Pie Chart
+// 1. 饼图
 const pieOption = computed(() => {
   const t = isDark.value
   return {
@@ -75,7 +75,7 @@ const pieOption = computed(() => {
   }
 })
 
-// 2. Horizontal Bar Chart
+// 2. 横向条形图
 const barOption = computed(() => {
   const t = isDark.value
   const items = diseaseDistribution.value.slice(0, 8)
@@ -98,7 +98,7 @@ const barOption = computed(() => {
   }
 })
 
-// 3. Trend Forecast Line Chart
+// 3. 趋势预测折线图
 const trendOption = computed(() => {
   const t = isDark.value
   const days = ['今天', '明天', '后天', '+3天', '+4天', '+5天', '+6天']
@@ -126,13 +126,13 @@ const trendOption = computed(() => {
 <template>
   <div class="p-8 h-full flex flex-col overflow-y-auto custom-scrollbar">
     
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="mb-8 flex justify-between items-end">
       <div>
         <h2 class="text-3xl font-black text-slate-800 dark:text-slate-100 tracking-tight">数据中心</h2>
         <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium">全局农业病害风险预测大屏与统计分析</p>
       </div>
-      <!-- Fast Stats -->
+      <!-- 快速统计 -->
       <div class="flex gap-4 hidden lg:flex">
          <div class="bg-white dark:bg-slate-900 px-6 py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
             <div class="text-3xl">🔬</div>
@@ -153,7 +153,7 @@ const trendOption = computed(() => {
     
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       
-      <!-- Chart 1: Trend Line -->
+      <!-- 图表 1：趋势折线 -->
       <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 lg:p-8 hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between mb-6">
           <h3 class="font-bold text-xl text-slate-800 dark:text-slate-100 flex items-center">
@@ -164,7 +164,7 @@ const trendOption = computed(() => {
         <v-chart :option="trendOption" autoresize style="height: 350px;" />
       </div>
 
-      <!-- Chart 2: Dist Pie -->
+      <!-- 图表 2：分布饼图 -->
       <div class="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 lg:p-8 hover:shadow-md transition-shadow">
         <h3 class="font-bold text-xl text-slate-800 dark:text-slate-100 flex items-center mb-6">
            <span class="text-blue-500 mr-2 border-l-4 border-blue-500 pl-2">危害类型占比</span>
@@ -172,7 +172,7 @@ const trendOption = computed(() => {
         <v-chart :option="pieOption" autoresize style="height: 350px;" />
       </div>
 
-      <!-- Chart 3: Top Bar -->
+      <!-- 图表 3：排行条形图 -->
       <div class="xl:col-span-3 bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm p-6 lg:p-8 hover:shadow-md transition-shadow">
         <h3 class="font-bold text-xl text-slate-800 dark:text-slate-100 flex items-center mb-6">
            <span class="text-indigo-500 mr-2 border-l-4 border-indigo-500 pl-2">病害发生频率排行榜</span>

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmCloud'
+import { resolveEffectiveStage } from '../../stores/farmUtils'
 import axios from 'axios'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -20,7 +21,7 @@ const syncDarkMode = () => {
   isDark.value = document.documentElement.classList.contains('dark')
 }
 
-// ========== API 状态 ==========
+// ========== 接口状态 ==========
 const loading = ref(false)
 const predictionData = ref(null)
 const errorMsg = ref('')
@@ -54,6 +55,7 @@ const currentTargetTypeLabel = computed(() => (
 ))
 
 const predictionWarnings = computed(() => predictionData.value?.warnings || [])
+const activeCropStage = computed(() => resolveEffectiveStage(farmStore.activeCrop || {}))
 
 function resetTargets() {
   targetOptions.value = { diseaseTargets: [], pestTargets: [] }
@@ -115,10 +117,11 @@ async function fetchTargets() {
   }
 }
 
-// ========== 调用后端 API ==========
+// ========== 调用后端接口 ==========
 async function fetchPrediction() {
   const crop = farmStore.activeCrop
   if (!crop) return
+  const effectiveStage = resolveEffectiveStage(crop)
   if (!selectedTargetName.value) {
     predictionData.value = null
     errorMsg.value = '请先选择预测对象。'
@@ -129,7 +132,7 @@ async function fetchPrediction() {
     errorMsg.value = '请先在农田档案里补充地区信息。'
     return
   }
-  if (!crop.stage) {
+  if (!effectiveStage) {
     predictionData.value = null
     errorMsg.value = '请先在农田档案里确认当前生效物候期。'
     return
@@ -147,7 +150,7 @@ async function fetchPrediction() {
       regionCode: crop.locationId,
       targetDate: new Date().toISOString().split('T')[0],
       forecastDays: 7,
-      phenologyStage: crop.stage,
+      phenologyStage: effectiveStage,
       reportRiskHint: 0
     }
 
@@ -183,7 +186,7 @@ watch(() => farmStore.activeCrop?.name, async () => {
 // 监听作物切换或预测对象切换 → 重新预测
 watch([
   () => farmStore.activeCropId,
-  () => farmStore.activeCrop?.stage,
+  () => resolveEffectiveStage(farmStore.activeCrop || {}),
   () => farmStore.activeCrop?.locationId,
   selectedTargetType,
   selectedTargetName
@@ -254,7 +257,7 @@ const riskPercentage = computed(() => {
   return Math.round(score * 100)
 })
 
-// ========== ECharts 图表配置 ==========
+// ========== 图表配置 ==========
 const trendOption = computed(() => {
   const series = predictionData.value?.dailySeries || []
   if (series.length === 0) return {}
@@ -367,7 +370,7 @@ const timelineItems = computed(() => {
   })
 })
 
-// ========== 环境因子（从 API 响应） ==========
+// ========== 环境因子（来自接口返回） ==========
 const weatherFactors = computed(() => {
   const ws = predictionData.value?.weatherSummary || {}
   const humidity = ws.humidityMean3d || 60
@@ -434,13 +437,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="prediction-page px-6 pt-4 min-h-full pb-8">
-    <!-- Header -->
+    <!-- 头部 -->
     <div class="mb-6">
       <h1 class="text-3xl font-bold text-slate-900 tracking-tight" v-motion-slide-visible-once-bottom>趋势预测</h1>
       <p class="text-slate-500 text-sm mt-1 font-medium" v-motion-slide-visible-once-bottom :delay="100">气象驱动 × 农学规则 × 智能分析</p>
     </div>
     
-    <!-- ========== A: 我的作物选择器 ========== -->
+    <!-- ========== 我的作物选择 ========== -->
     <div class="mb-6" v-motion-slide-visible-once-bottom :delay="50">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-bold text-slate-700">🌾 我的作物</h2>
@@ -478,13 +481,13 @@ onBeforeUnmount(() => {
           <span class="text-xl">{{ crop.icon }}</span>
           <div class="text-left">
             <div class="text-sm font-bold" :class="farmStore.activeCropId === crop.id ? 'text-green-700' : 'text-slate-700'">{{ crop.name }}</div>
-            <div class="text-[10px] font-medium text-slate-400">{{ crop.stage }} · {{ crop.region }}</div>
+            <div class="text-[10px] font-medium text-slate-400">{{ resolveEffectiveStage(crop) || '待确认' }} · {{ crop.region }}</div>
           </div>
         </button>
       </div>
     </div>
 
-    <!-- ========== A2: 预测对象 + 物候期 选择器 ========== -->
+    <!-- ========== 预测对象和物候期选择 ========== -->
     <div v-if="farmStore.activeCrop && hasTargetOptions" class="mb-6 space-y-3" v-motion-slide-visible-once-bottom :delay="70">
       <div>
         <label class="text-[10px] font-bold text-slate-400 mb-2 block">🎯 预测对象</label>
@@ -520,7 +523,7 @@ onBeforeUnmount(() => {
       <div>
         <label class="text-[10px] font-bold text-slate-400 mb-1 block">🌱 物候期</label>
         <div class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
-          {{ farmStore.activeCrop.stage || '待确认' }}
+          {{ activeCropStage || '待确认' }}
           <span class="ml-2 text-[10px] text-slate-400">
             {{ farmStore.activeCrop.stageMode === 'AUTO' ? '自动判断' : '手动设置' }}
           </span>
@@ -528,13 +531,13 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- ========== Loading ==========  -->
+    <!-- ========== 加载中 ==========  -->
     <div v-if="loading || targetsLoading" class="flex flex-col items-center justify-center py-16">
       <div class="w-10 h-10 border-3 border-green-200 border-t-green-500 rounded-full animate-spin mb-4"></div>
       <p class="text-sm text-slate-400 font-medium">{{ targetsLoading ? '正在加载预测对象...' : '正在分析气象数据...' }}</p>
     </div>
 
-    <!-- ========== Error ==========  -->
+    <!-- ========== 出错提示 ==========  -->
     <div v-else-if="errorMsg" class="bg-red-50 border border-red-100 rounded-2xl p-6 text-center mb-6">
       <div class="text-2xl mb-2">⚠️</div>
       <p class="text-sm text-red-600 font-medium">{{ errorMsg }}</p>
@@ -547,7 +550,7 @@ onBeforeUnmount(() => {
         <!-- 左侧核心区 -->
         <div class="lg:col-span-8 flex flex-col lg:gap-6">
           <div class="lg:flex lg:gap-6">
-            <!-- ========== B: 风险等级卡片 ========== -->
+            <!-- ========== 风险等级卡片 ========== -->
             <div 
               class="relative overflow-hidden rounded-[2rem] p-8 text-white flex-1 mb-6 lg:mb-0 transform transition-all duration-500 hover:scale-[1.02]" 
               :class="[`shadow-2xl ${riskColorClasses.shadow}`]"
@@ -586,7 +589,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <!-- ========== C: 主导因子卡片 ========== -->
+            <!-- ========== 主要影响因素卡片 ========== -->
             <div v-if="predictionData.topDrivers && predictionData.topDrivers.length > 0" class="lg:w-1/3 mb-6 lg:mb-0" v-motion-slide-visible-once-bottom :delay="100">
               <h2 class="text-sm font-bold text-slate-700 mb-3">🔍 主导因子</h2>
               <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-3 h-[calc(100%-2rem)]">
@@ -615,7 +618,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- ========== D: 风险走势图 (ECharts) ========== -->
+          <!-- ========== 风险走势 ========== -->
           <div class="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 mb-6 lg:mb-0 border border-slate-100 flex-1" v-motion-slide-visible-once-bottom :delay="150">
             <div class="flex justify-between items-center mb-2">
               <h2 class="text-base font-bold text-slate-900">📊 未来7天风险走势</h2>
@@ -631,7 +634,7 @@ onBeforeUnmount(() => {
 
         <!-- 右侧详情区 -->
         <div class="lg:col-span-4 flex flex-col gap-6">
-          <!-- ========== F: 环境因子面板 ========== -->
+          <!-- ========== 环境因子面板 ========== -->
           <div v-motion-slide-visible-once-bottom :delay="250">
             <h2 class="text-sm font-bold text-slate-700 mb-3 hidden lg:block">🌡️ 环境因子</h2>
             <div class="grid grid-cols-2 gap-3">
@@ -653,7 +656,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- ========== E: 防治建议时间线 ========== -->
+          <!-- ========== 防治建议时间线 ========== -->
           <div 
             v-if="timelineItems.length > 0"
             class="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 border border-slate-100" 
@@ -707,7 +710,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- ========== G: 识别历史 ========== -->
+          <!-- ========== 识别历史 ========== -->
           <div 
             v-if="farmStore.activeCrop"
             class="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 border border-slate-100" 

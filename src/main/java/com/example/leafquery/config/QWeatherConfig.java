@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * 和风天气 API 配置。
- * 需要在 application.properties 中填入真实值。
+ * 真实值由 QWEATHER_* 环境变量注入；本地启动器从被 Git 忽略的 .env 加载。
  */
 @Configuration
 public class QWeatherConfig {

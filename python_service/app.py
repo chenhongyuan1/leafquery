@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 
-# Must be configured before importing ultralytics, otherwise config writes may fail.
+# 必须在导入 ultralytics 之前配置，否则配置写入可能会失败。
 os.environ["YOLO_CONFIG_DIR"] = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), ".ultralytics"
 )
@@ -110,7 +110,7 @@ def is_class_allowed(class_name, categories):
 
 @app.route("/reload", methods=["POST"])
 def reload_model():
-    """Hot reload the model after replacing best.pt."""
+    """在替换 best.pt 后热重载模型。"""
     global model
     try:
         model = YOLO(MODEL_PATH)
@@ -121,7 +121,7 @@ def reload_model():
 
 @app.route("/upload_model", methods=["POST"])
 def upload_model():
-    """Upload a new .pt model, back up the old one, and hot reload."""
+    """上传新的 .pt 模型，备份旧模型，并热重载。"""
     global model
     if "file" not in request.files:
         return jsonify({"code": 400, "message": "missing model file"}), 400
@@ -285,7 +285,7 @@ def build_classification_prediction(result):
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """Run YOLO inference with optional category filtering."""
+    """运行 YOLO 推理，并支持可选的类别过滤。"""
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 

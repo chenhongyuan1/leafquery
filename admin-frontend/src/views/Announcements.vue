@@ -96,7 +96,7 @@ function typeBadge(t) { return { info: 'blue', warning: 'yellow', urgent: 'red' 
       </table>
     </div>
 
-    <!-- Modal -->
+    <!-- 模态框 -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal">
         <div class="modal-header">
@@ -144,7 +144,7 @@ function typeBadge(t) { return { info: 'blue', warning: 'yellow', urgent: 'red' 
       </div>
     </div>
 
-    <!-- Toast -->
+    <!-- 提示框 -->
     <div v-if="toast" class="toast-container"><div class="toast success">{{ toast }}</div></div>
   </div>
 </template>

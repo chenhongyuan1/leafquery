@@ -73,3 +73,17 @@ export const normalizeStageMode = (value, fallback = 'MANUAL') => {
   }
   return value.trim().toUpperCase() === 'AUTO' ? 'AUTO' : 'MANUAL'
 }
+
+export const resolveEffectiveStage = (crop = {}) => {
+  const stage = typeof crop.stage === 'string' ? crop.stage.trim() : ''
+  if (stage) {
+    return stage
+  }
+
+  const estimatedStage = typeof crop.estimatedStage === 'string' ? crop.estimatedStage.trim() : ''
+  if (!estimatedStage) {
+    return ''
+  }
+
+  return normalizeStageMode(crop.stageMode, 'AUTO') === 'AUTO' ? estimatedStage : ''
+}

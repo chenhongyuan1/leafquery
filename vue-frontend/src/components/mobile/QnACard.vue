@@ -16,7 +16,7 @@ const props = defineProps({
   expertId: Number,
   likes: { type: Number, default: 0 },
   comments: { type: Array, default: () => [] },
-  // Accept a set of liked post IDs from parent to restore state
+  // 接收来自父组件的点赞帖子 ID 集合，用于恢复状态
   likedPostIds: { type: Set, default: () => new Set() }
 })
 
@@ -39,7 +39,7 @@ watch(() => props.likes, (val) => {
   localLikes.value = val
 })
 
-// Restore liked state from parent's likedPostIds set
+// 从父组件的点赞记录中恢复点赞状态
 watch(() => props.likedPostIds, (ids) => {
   if (props.id && ids) {
     isLiked.value = ids.has(props.id)
@@ -52,7 +52,7 @@ const toggleLike = async () => {
 
   likeSubmitting.value = true
 
-  // Optimistic UI update
+  // 乐观 UI 更新
   isLiked.value = !isLiked.value
   localLikes.value += isLiked.value ? 1 : -1
 
@@ -61,13 +61,13 @@ const toggleLike = async () => {
       userId: user.userId
     })
     if (res.data.code === 200) {
-      // Use authoritative server state
+      // 使用服务器返回的权威状态
       isLiked.value = res.data.liked
       localLikes.value = res.data.likes
     }
   } catch (e) {
     console.error('点赞同步失败', e)
-    // Revert optimistic update
+    // 回滚乐观更新
     isLiked.value = !isLiked.value
     localLikes.value += isLiked.value ? 1 : -1
   } finally {
@@ -145,7 +145,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
 
 <template>
   <div class="mb-4 break-inside-avoid rounded-2xl border border-slate-50 bg-white p-4 shadow-[0_2px_15px_rgba(0,0,0,0.03)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_12px_36px_rgba(2,6,23,0.28)]">
-    <!-- User Header -->
+    <!-- 用户头部信息 -->
     <div class="flex items-center space-x-3 mb-3">
       <div class="h-10 w-10 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <img v-if="userAvatar" :src="userAvatar" class="w-full h-full object-cover" />
@@ -159,10 +159,10 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
       </div>
     </div>
 
-    <!-- Question Content -->
+    <!-- 问题内容 -->
     <p class="mb-3 rounded-lg text-sm leading-relaxed text-slate-700 dark:text-slate-300">{{ content }}</p>
 
-    <!-- Images Grid -->
+    <!-- 图片网格 -->
     <div v-if="images && images.length" class="grid gap-2 mb-4" :class="images.length === 1 ? 'grid-cols-1' : 'grid-cols-3'">
       <div 
         v-for="(img, idx) in images" 
@@ -171,14 +171,14 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
         :class="images.length === 1 ? 'h-48' : 'h-24 aspect-square'"
       >
          <img v-if="img" :src="img" @click.stop="previewImage = img" class="w-full h-full object-cover absolute inset-0 z-10 hover:scale-105 transition-transform duration-300" />
-         <!-- Placeholder color if no real src -->
+         <!-- 如果没有真实图片地址，则显示占位颜色 -->
          <div class="absolute inset-0 flex items-center justify-center bg-slate-200 text-slate-300 dark:bg-slate-700 dark:text-slate-500">
             🖼️
           </div>
       </div>
     </div>
 
-    <!-- Expert Reply -->
+    <!-- 专家回复 -->
     <div v-if="localExpertReply" class="group relative mb-4 rounded-xl border border-green-100 bg-green-50/50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
       <div class="absolute -top-1.5 left-4 h-3 w-3 rotate-45 border-l border-t border-green-100 bg-green-50 transform dark:border-emerald-500/20 dark:bg-emerald-500/10"></div>
       
@@ -198,7 +198,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
       </p>
     </div>
 
-    <!-- Actions Bar -->
+    <!-- 操作栏 -->
     <div class="mt-2 flex items-center justify-between border-t border-slate-50 pt-3 text-slate-400 dark:border-slate-800 dark:text-slate-500">
       <div class="flex space-x-4">
         <button v-if="userId === currentUserId" @click.stop="$emit('delete')" class="flex items-center space-x-1.5 text-red-400/80 transition-colors hover:text-red-500">
@@ -222,7 +222,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
       </div>
     </div>
 
-    <!-- Comments Section -->
+    <!-- 评论区 -->
     <div v-if="showComments" class="animate-fade-in relative z-20 mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
       <div class="space-y-3 mb-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
         <div v-if="comments.length === 0" class="py-2 text-center text-xs text-slate-400 dark:text-slate-500">暂无评论，来做第一个发言的人吧！</div>
@@ -246,7 +246,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
          </div>
       </div>
       
-      <!-- Comment Input -->
+      <!-- 评论输入框 -->
       <div class="flex space-x-2" @click.stop>
          <input 
            v-model="newComment" 
@@ -265,7 +265,7 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
       </div>
     </div>
 
-    <!-- Image Preview Modal -->
+    <!-- 图片预览模态框 -->
     <Teleport to="body">
       <div v-if="previewImage" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-fade-in" @click="previewImage = null">
         <button class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors w-10 h-10 flex items-center justify-center text-3xl font-bold z-10 active:scale-90">✕</button>
