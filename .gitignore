@@ -48,4 +48,4 @@ python_service/Ultralytics/
 /src/main/resources/application-local.properties
 /src/main/resources/application-*.local.properties
 
-/docs/review
+/docs/

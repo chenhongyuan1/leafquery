@@ -1,6 +1,7 @@
 package com.example.leafquery.security;
 
 import com.example.leafquery.controller.AdminController;
+import com.example.leafquery.dto.ApiResponse;
 import com.example.leafquery.entity.AdminUser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -65,7 +66,7 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
     private boolean reject(HttpServletResponse response, int status, String message) throws Exception {
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
-        objectMapper.writeValue(response.getWriter(), Map.of("code", status, "message", message));
+        objectMapper.writeValue(response.getWriter(), ApiResponse.error(status, message));
         return false;
     }
 }

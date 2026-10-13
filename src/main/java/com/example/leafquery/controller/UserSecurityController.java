@@ -6,8 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.example.leafquery.dto.*;
 
 @RestController
 @RequestMapping("/api/user")
@@ -18,65 +17,65 @@ public class UserSecurityController {
     private UserSecurityService userSecurityService;
 
     @PutMapping("/password")
-    public ResponseEntity<Map<String, Object>> changePassword(@RequestBody ChangePasswordRequest request) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<UserResponse>> changePassword(@RequestBody ChangePasswordRequest request) {
+        ApiResponse<UserResponse> response = new ApiResponse<>();
         try {
             User updatedUser = userSecurityService.changePassword(
                 request.userId(),
                 request.currentPassword(),
                 request.newPassword()
             );
-            response.put("code", 200);
-            response.put("message", "密码修改成功");
-            response.put("data", updatedUser);
+            response.setCode(200);
+            response.setMessage("密码修改成功");
+            response.setData(UserResponse.from(updatedUser));
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            response.put("code", 400);
-            response.put("message", e.getMessage());
+            response.setCode(400);
+            response.setMessage(e.getMessage());
             return ResponseEntity.badRequest().body(response);
         } catch (IllegalStateException e) {
             if (UserSecurityService.USER_NOT_FOUND.equals(e.getMessage())) {
-                response.put("code", 404);
-                response.put("message", "用户不存在");
+                response.setCode(404);
+                response.setMessage("用户不存在");
                 return ResponseEntity.status(404).body(response);
             }
 
-            response.put("code", 500);
-            response.put("message", e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         } catch (RuntimeException e) {
-            response.put("code", 500);
-            response.put("message", e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         }
     }
 
     @PostMapping("/delete-account")
-    public ResponseEntity<Map<String, Object>> deleteAccount(@RequestBody DeleteAccountRequest request) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<Boolean>> deleteAccount(@RequestBody DeleteAccountRequest request) {
+        ApiResponse<Boolean> response = new ApiResponse<>();
         try {
             userSecurityService.deleteAccount(request.userId(), request.currentPassword());
-            response.put("code", 200);
-            response.put("message", "账号注销成功");
-            response.put("data", true);
+            response.setCode(200);
+            response.setMessage("账号注销成功");
+            response.setData(true);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            response.put("code", 400);
-            response.put("message", e.getMessage());
+            response.setCode(400);
+            response.setMessage(e.getMessage());
             return ResponseEntity.badRequest().body(response);
         } catch (IllegalStateException e) {
             if (UserSecurityService.USER_NOT_FOUND.equals(e.getMessage())) {
-                response.put("code", 404);
-                response.put("message", "用户不存在");
+                response.setCode(404);
+                response.setMessage("用户不存在");
                 return ResponseEntity.status(404).body(response);
             }
 
-            response.put("code", 500);
-            response.put("message", e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         } catch (RuntimeException e) {
-            response.put("code", 500);
-            response.put("message", e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         }
     }

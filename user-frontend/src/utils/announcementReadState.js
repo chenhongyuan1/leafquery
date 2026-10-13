@@ -38,10 +38,6 @@ export const fetchAnnouncements = async ({ popup = false } = {}) => {
 
   const { data } = await discoveryApi.announcements(user?.userId, popup)
 
-  if (data?.code !== 200) {
-    throw new Error(data?.message || '加载公告失败')
-  }
-
   return Array.isArray(data.data) ? data.data : []
 }
 
@@ -62,13 +58,9 @@ export const markAnnouncementAsRead = async (announcementId) => {
 
   const user = getStoredUser()
   if (user?.userId) {
-    const { data } = await discoveryApi.markRead(id, {
+    await discoveryApi.markRead(id, {
       userId: user.userId
     })
-
-    if (data?.code !== 200) {
-      throw new Error(data?.message || '标记通知已读失败')
-    }
     return []
   }
 

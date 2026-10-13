@@ -36,6 +36,25 @@ test('localStorage role and ID never become authorization headers', async () => 
   assert.equal(useAdminStore().isLoggedIn, false)
 })
 
+test('HTTP 200 business failures reject and retain a valid admin session', async () => {
+  useAdminStore().login({ role: 'admin' }, 'valid-token')
+  api.defaults.adapter = async config => ({ data: { code: 409, message: '内容已发生变化' }, status: 200, headers: {}, config })
+  await assert.rejects(api.post('/announcements', {}), error => error.status === 409 && error.message === '内容已发生变化')
+  assert.equal(sessionStorage.getItem('admin_token'), 'valid-token')
+  assert.deepEqual(redirects, [])
+})
+
+test('business 401 clears a session while login failures do not redirect', async () => {
+  useAdminStore().login({ role: 'admin' }, 'expired-token')
+  api.defaults.adapter = async config => ({ data: { code: 401, message: '登录已失效' }, status: 200, headers: {}, config })
+  await assert.rejects(api.post('/login', {}))
+  assert.deepEqual(redirects, [])
+  assert.equal(sessionStorage.getItem('admin_token'), 'expired-token')
+  await assert.rejects(api.get('/logs'))
+  assert.equal(sessionStorage.getItem('admin_token'), null)
+  assert.deepEqual(redirects, ['/login'])
+})
+
 test('login stores the server token and requests use Bearer authorization', async () => {
   const store = useAdminStore()
   store.login({ role: 'admin', adminId: 7 }, 'server-issued-token')

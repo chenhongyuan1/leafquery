@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest({AdminController.class, DiscoveryController.class})
+@org.springframework.context.annotation.Import({com.example.leafquery.controller.ApiExceptionHandler.class,
+        com.example.leafquery.controller.LegacyEnvelopeAdvice.class})
 @ContextConfiguration(classes = {AdminController.class, DiscoveryController.class, AdminWebConfig.class,
         AdminAuthInterceptor.class, AdminSessionService.class})
 class AdminAuthorizationTests {

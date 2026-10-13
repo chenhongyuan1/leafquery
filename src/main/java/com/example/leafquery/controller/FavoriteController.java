@@ -6,9 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import com.example.leafquery.dto.*;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/favorite")
@@ -19,33 +18,34 @@ public class FavoriteController {
     private FavoriteService favoriteService;
 
     @PostMapping("/toggle")
-    public ResponseEntity<Map<String, Object>> toggleFavorite(@RequestBody Favorite favorite) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<Boolean>> toggleFavorite(@RequestBody FavoriteRequest request) {
+        Favorite favorite = request.toEntity();
+        ApiResponse<Boolean> response = new ApiResponse<>();
         try {
             boolean success = favoriteService.toggleFavorite(favorite);
-            response.put("code", 200);
-            response.put("message", "操作成功");
-            response.put("data", success);
+            response.setCode(200);
+            response.setMessage("操作成功");
+            response.setData(success);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            response.put("code", 500);
-            response.put("message", "服务器错误: " + e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         }
     }
 
     @GetMapping("/list")
-    public ResponseEntity<Map<String, Object>> getFavorites(@RequestParam("userId") Long userId) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<List<FavoriteResponse>>> getFavorites(@RequestParam("userId") Long userId) {
+        ApiResponse<List<FavoriteResponse>> response = new ApiResponse<>();
         try {
             List<Favorite> favorites = favoriteService.getUserFavorites(userId);
-            response.put("code", 200);
-            response.put("message", "获取成功");
-            response.put("data", favorites);
+            response.setCode(200);
+            response.setMessage("获取成功");
+            response.setData(favorites.stream().map(FavoriteResponse::from).toList());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            response.put("code", 500);
-            response.put("message", "服务器错误: " + e.getMessage());
+            response.setCode(500);
+            response.setMessage("服务暂时不可用，请稍后重试。");
             return ResponseEntity.status(500).body(response);
         }
     }

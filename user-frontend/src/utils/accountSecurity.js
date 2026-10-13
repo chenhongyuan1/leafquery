@@ -1,4 +1,4 @@
-import { ApiError, userApi } from '../api/index.js'
+import { getApiErrorMessage, userApi } from '../api/index.js'
 
 const USER_STORAGE_KEY = 'user'
 export const AUTH_CHANGE_EVENT = 'leafquery-auth-changed'
@@ -47,17 +47,7 @@ export const persistUser = (user) => {
   return user
 }
 
-export const getAccountErrorMessage = (error, fallback = '操作失败，请稍后重试') => {
-  if ((error instanceof ApiError)) {
-    return error.response?.data?.message || fallback
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-
-  return fallback
-}
+export const getAccountErrorMessage = (error, fallback = '操作失败，请稍后重试') => getApiErrorMessage(error, fallback)
 
 export const changePassword = async ({ userId, currentPassword, newPassword }) => {
   const response = await userApi.changePassword({
@@ -65,10 +55,6 @@ export const changePassword = async ({ userId, currentPassword, newPassword }) =
     currentPassword,
     newPassword
   })
-
-  if (response.data?.code !== 200) {
-    throw new Error(response.data?.message || '密码修改失败')
-  }
 
   const user = response.data?.data || null
   if (user) {
@@ -78,14 +64,10 @@ export const changePassword = async ({ userId, currentPassword, newPassword }) =
 }
 
 export const deleteAccount = async ({ userId, currentPassword }) => {
-  const response = await userApi.deleteAccount({
+  await userApi.deleteAccount({
     userId,
     currentPassword
   })
-
-  if (response.data?.code !== 200) {
-    throw new Error(response.data?.message || '账号注销失败')
-  }
 
   return true
 }
