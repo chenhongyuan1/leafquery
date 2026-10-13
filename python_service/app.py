@@ -40,7 +40,7 @@ def _load_category_index():
     if not (catalog_path and os.path.exists(catalog_path)):
         catalog_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "docs",
+            "config",
             "detection_target_metadata.json",
         )
     supported = _FALLBACK_YOLO_SUPPORTED

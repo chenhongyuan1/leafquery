@@ -146,7 +146,7 @@ function Get-Environment {
         throw 'The local profile requires src/main/resources/application-local.properties.'
     }
     foreach ($file in @('mvnw.cmd', '.mvn/wrapper/maven-wrapper.properties', 'python_service/app.py',
-        'python_service/best.pt', 'docs/detection_target_metadata.json',
+        'python_service/best.pt', 'config/detection_target_metadata.json',
         'user-frontend/package.json', 'admin-frontend/package.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $AppRoot $file) -PathType Leaf)) {
             throw "Required file is missing: $file"
@@ -370,7 +370,7 @@ try {
     # files in the workspace to avoid failures with this machine's Unicode TEMP path.
     $javaTemp = Join-Path $RuntimeRoot 'java-tmp'
     New-Item -ItemType Directory -Path $javaTemp -Force | Out-Null
-    $metadataPath = Join-Path $AppRoot 'docs/detection_target_metadata.json'
+    $metadataPath = Join-Path $AppRoot 'config/detection_target_metadata.json'
     if ($env:DETECTION_METADATA_PATH) {
         $metadataPath = $env:DETECTION_METADATA_PATH
         if (-not [IO.Path]::IsPathRooted($metadataPath)) { $metadataPath = Join-Path $AppRoot $metadataPath }

@@ -24,6 +24,14 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- Lock a stable parent row even when the user has no crops yet. -->
+    <select id="lockUserById" resultType="java.lang.Long" useCache="false" flushCache="true">
+        SELECT user_id
+        FROM `user`
+        WHERE user_id = #{userId}
+        FOR UPDATE
+    </select>
+
     <select id="selectByUserId" resultMap="FarmCropResultMap">
         SELECT *
         FROM user_crop

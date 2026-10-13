@@ -72,14 +72,7 @@ const formatTime = (value) => {
 
 const getQnaHeadline = (item) => {
   const text = (item?.content || '').replace(/\s+/g, ' ').trim()
-  if (!text) return '未命名提问'
-  return text.length > 30 ? `${text.slice(0, 30)}...` : text
-}
-
-const getQnaExcerpt = (item) => {
-  const text = (item?.content || '').replace(/\s+/g, ' ').trim()
-  if (!text) return '发布者暂未填写问题描述。'
-  return text.length > 120 ? `${text.slice(0, 120)}...` : text
+  return text || '未命名提问'
 }
 
 const getConditionColor = (conditionType) => {
@@ -454,95 +447,80 @@ const deletePost = async (postId) => {
         </div>
       </div>
 
-      <div v-else-if="activeCategory === 2" class="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+      <div v-else-if="activeCategory === 2" class="space-y-3">
         <article
           v-for="item in currentItems"
           :key="item.id"
-          class="pc-forum-thread group flex h-full cursor-pointer flex-col overflow-hidden rounded-[1.4rem] border border-slate-200/80 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-500/40"
+          class="pc-forum-thread group grid cursor-pointer grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 transition hover:border-emerald-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-500/40"
           @click="selectedQnaItem = item"
         >
-          <div class="flex gap-4">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-sm font-black text-white ring-1 ring-slate-200/80 dark:bg-slate-800 dark:ring-slate-700">
-              <img v-if="item.userAvatar" :src="item.userAvatar" class="h-full w-full object-cover" />
-              <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-400 via-sky-400 to-indigo-500">
-                {{ item.user?.charAt(0)?.toUpperCase() || '?' }}
-              </div>
+          <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-sm font-black text-white ring-1 ring-slate-200/80 dark:bg-slate-800 dark:ring-slate-700">
+            <img v-if="item.images?.length" :src="item.images[0]" alt="提问附图" loading="lazy" class="h-full w-full object-cover" />
+            <img v-else-if="item.userAvatar" :src="item.userAvatar" alt="提问者头像" loading="lazy" class="h-full w-full object-cover" />
+            <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-400 via-sky-400 to-indigo-500">
+              {{ item.user?.charAt(0)?.toUpperCase() || '?' }}
             </div>
+          </div>
 
-            <div class="flex min-w-0 flex-1 flex-col">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                    <span class="pc-forum-board-pill">问答交流</span>
-                    <span class="normal-case tracking-normal">{{ item.user || '匿名用户' }}</span>
-                    <span class="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                    <span class="normal-case tracking-normal">{{ item.time }}</span>
-                  </div>
-
-                  <h3 class="mt-2.5 text-lg font-black leading-tight text-slate-900 dark:text-slate-100">
-                    {{ getQnaHeadline(item) }}
-                  </h3>
-                </div>
-
-                <div class="flex shrink-0 items-center gap-1.5">
-                  <button
-                    class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:scale-105 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    :disabled="favStore.isFavoriteSubmitting"
-                    @click.stop="handleFavoriteToggle(item)"
-                  >
-                    <span class="text-base">{{ favStore.isFavorite(item) ? '★' : '☆' }}</span>
-                  </button>
-                  <button
-                    v-if="item.userId === currentUser?.userId"
-                    class="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-400 transition hover:bg-red-100 hover:text-red-500 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-                    @click.stop="deletePost(item.id)"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-
-              <p class="mt-3 line-clamp-3 text-[13px] leading-6 text-slate-600 dark:text-slate-300">
-                {{ getQnaExcerpt(item) }}
-              </p>
-
-              <div v-if="item.images?.length" class="mt-3 flex gap-2 overflow-hidden">
-                <div
-                  v-for="(image, index) in item.images.slice(0, 3)"
-                  :key="`${item.id}_${index}`"
-                  class="h-16 w-16 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:ring-slate-700"
-                >
-                  <img :src="image" class="h-full w-full object-cover" />
-                </div>
-              </div>
-
-              <div class="mt-3.5 flex flex-wrap gap-1.5">
-                <span class="pc-forum-chip" :class="item.expertReply ? 'pc-forum-chip--reply' : 'pc-forum-chip--wait'">
-                  {{ item.expertReply ? '专家已回复' : '等待专家回复' }}
-                </span>
-                <span v-if="item.images?.length" class="pc-forum-chip">
-                  {{ item.images.length }} 张附图
-                </span>
-                <span class="pc-forum-chip">
-                  {{ item.comments.length }} 条评论
-                </span>
-                <span class="pc-forum-chip">
-                  {{ item.likes || 0 }} 次点赞
-                </span>
-              </div>
-
-              <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-[13px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                <div class="flex flex-wrap items-center gap-3">
-                  <span>{{ item.expertReply ? '帖子有新回复' : '帖子仍在讨论中' }}</span>
-                  <span v-if="item.comments.length > 0">最近互动 {{ item.comments[0]?.time }}</span>
-                </div>
-                <div class="flex items-center gap-3 font-semibold">
-                  <span>💬 {{ item.comments.length }}</span>
-                  <span>👍 {{ item.likes || 0 }}</span>
-                  <span class="text-slate-700 dark:text-slate-200">查看详情 →</span>
-                </div>
-              </div>
+          <div class="min-w-0">
+            <h3 class="text-base font-bold text-slate-900 transition group-hover:text-emerald-600 dark:text-slate-100 dark:group-hover:text-emerald-300">
+              <button
+                type="button"
+                class="block w-full truncate rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                :title="getQnaHeadline(item)"
+                :aria-label="'查看提问：' + getQnaHeadline(item)"
+                @click.stop="selectedQnaItem = item"
+              >
+                {{ getQnaHeadline(item) }}
+              </button>
+            </h3>
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <span class="max-w-40 truncate">{{ item.user || '匿名用户' }}</span>
+              <span>{{ item.time }}</span>
+              <span class="pc-forum-chip" :class="item.expertReply ? 'pc-forum-chip--reply' : 'pc-forum-chip--wait'">
+                {{ item.expertReply ? '专家已回复' : '等待专家回复' }}
+              </span>
             </div>
+          </div>
+
+          <div class="flex shrink-0 items-center gap-4">
+            <div class="flex items-center gap-3 text-xs font-medium tabular-nums text-slate-400 dark:text-slate-500">
+              <span class="flex items-center gap-1" :aria-label="item.comments.length + ' 条评论'">
+                <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
+                </svg>
+                {{ item.comments.length }}
+              </span>
+              <span class="flex items-center gap-1" :aria-label="(item.likes || 0) + ' 次点赞'">
+                <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 10v11H3V10h4Zm0 0 5-7a3 3 0 0 1 1 4l-1 3h6a3 3 0 0 1 3 3l-1 6a2 2 0 0 1-2 2H7" />
+                </svg>
+                {{ item.likes || 0 }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                :aria-label="favStore.isFavorite(item) ? '取消收藏提问' : '收藏提问'"
+                :disabled="favStore.isFavoriteSubmitting"
+                @click.stop="handleFavoriteToggle(item)"
+              >
+                <span class="text-base">{{ favStore.isFavorite(item) ? '★' : '☆' }}</span>
+              </button>
+              <button
+                v-if="item.userId === currentUser?.userId"
+                type="button"
+                aria-label="删除提问"
+                class="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-400 transition hover:bg-red-100 hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                @click.stop="deletePost(item.id)"
+              >
+                🗑️
+              </button>
+            </div>
+            <svg aria-hidden="true" class="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-500 dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7" />
+            </svg>
           </div>
         </article>
       </div>
@@ -752,14 +730,14 @@ const deletePost = async (postId) => {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
   border-color: rgba(226, 232, 240, 0.88);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
 }
 
 :global(.dark .pc-forum-thread) {
   background:
     linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.98)) !important;
   border-color: rgba(51, 65, 85, 0.88) !important;
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.28) !important;
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.12) !important;
 }
 
 .pc-knowledge-dialog {
@@ -770,20 +748,6 @@ const deletePost = async (postId) => {
 :global(.dark .pc-knowledge-dialog) {
   background: rgba(2, 6, 23, 0.96) !important;
   border-color: rgba(51, 65, 85, 0.88) !important;
-}
-
-.pc-forum-board-pill {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 9999px;
-  padding: 0.3rem 0.66rem;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(14, 165, 233, 0.14));
-  color: #15803d;
-}
-
-:global(.dark .pc-forum-board-pill) {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(14, 165, 233, 0.2));
-  color: #a7f3d0;
 }
 
 .pc-forum-chip {

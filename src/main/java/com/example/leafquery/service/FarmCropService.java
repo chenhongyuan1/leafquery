@@ -4,6 +4,7 @@ import com.example.leafquery.dto.PhenologyEstimateResponse;
 import com.example.leafquery.entity.FarmCrop;
 import com.example.leafquery.mapper.FarmCropMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +25,12 @@ public class FarmCropService {
         this.phenologyEstimateService = phenologyEstimateService;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public List<FarmCrop> getUserCrops(Long userId) {
+        // This read also refreshes phenology and writes isActive through updateCrop.
+        if (!lockUser(userId)) {
+            return List.of();
+        }
         List<FarmCrop> crops = farmCropMapper.selectByUserId(userId);
         for (FarmCrop crop : crops) {
             refreshAutoPhenologyIfNeeded(crop);
@@ -32,24 +38,33 @@ public class FarmCropService {
         return farmCropMapper.selectByUserId(userId);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public FarmCrop createCrop(FarmCrop crop) {
+        if (!lockUser(crop.getUserId())) {
+            throw new IllegalArgumentException("用户不存在");
+        }
         normalizeCrop(crop);
         applyPhenologyState(crop, true);
         boolean shouldActivate = Boolean.TRUE.equals(crop.getIsActive()) || farmCropMapper.countByUserId(crop.getUserId()) == 0;
-        crop.setIsActive(shouldActivate);
+        // Activate only after the insert, so activation must affect exactly one row.
+        crop.setIsActive(Boolean.FALSE);
 
         if (shouldActivate) {
             farmCropMapper.clearActiveByUserId(crop.getUserId());
         }
 
-        farmCropMapper.insertCrop(crop);
+        requireSingleRow(farmCropMapper.insertCrop(crop), "创建作物");
         if (shouldActivate) {
-            farmCropMapper.setActiveCrop(crop.getCropId(), crop.getUserId());
+            activateCrop(crop.getCropId(), crop.getUserId());
         }
         return farmCropMapper.selectByCropId(crop.getCropId());
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public FarmCrop updateCrop(Long cropId, FarmCrop crop) {
+        if (!lockUser(crop.getUserId())) {
+            return null;
+        }
         FarmCrop existing = farmCropMapper.selectByCropId(cropId);
         if (existing == null || crop.getUserId() == null || !crop.getUserId().equals(existing.getUserId())) {
             return null;
@@ -74,42 +89,70 @@ public class FarmCropService {
         normalizeCrop(crop);
         applyPhenologyState(crop, true);
 
-        if (Boolean.TRUE.equals(crop.getIsActive())) {
+        boolean shouldActivate = Boolean.TRUE.equals(crop.getIsActive());
+        if (shouldActivate) {
             farmCropMapper.clearActiveByUserId(crop.getUserId());
         }
 
+        crop.setIsActive(Boolean.FALSE);
+        // An unchanged update may report zero changed rows with MySQL useAffectedRows.
         farmCropMapper.updateCrop(crop);
-        if (Boolean.TRUE.equals(crop.getIsActive())) {
-            farmCropMapper.setActiveCrop(cropId, crop.getUserId());
+        if (shouldActivate) {
+            activateCrop(cropId, crop.getUserId());
         }
         return farmCropMapper.selectByCropId(cropId);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public FarmCrop setActiveCrop(Long cropId, Long userId) {
+        if (!lockUser(userId)) {
+            return null;
+        }
         FarmCrop existing = farmCropMapper.selectByCropId(cropId);
         if (existing == null || userId == null || !userId.equals(existing.getUserId())) {
             return null;
         }
 
         farmCropMapper.clearActiveByUserId(userId);
-        farmCropMapper.setActiveCrop(cropId, userId);
+        activateCrop(cropId, userId);
         return farmCropMapper.selectByCropId(cropId);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public boolean deleteCrop(Long cropId, Long userId) {
+        if (!lockUser(userId)) {
+            return false;
+        }
         FarmCrop existing = farmCropMapper.selectByCropId(cropId);
         if (existing == null || userId == null || !userId.equals(existing.getUserId())) {
             return false;
         }
 
-        farmCropMapper.deleteCrop(cropId, userId);
+        requireSingleRow(farmCropMapper.deleteCrop(cropId, userId), "删除作物");
         if (Boolean.TRUE.equals(existing.getIsActive())) {
             FarmCrop fallback = farmCropMapper.selectFirstByUserId(userId);
             if (fallback != null) {
-                farmCropMapper.setActiveCrop(fallback.getCropId(), userId);
+                farmCropMapper.clearActiveByUserId(userId);
+                activateCrop(fallback.getCropId(), userId);
             }
         }
         return true;
+    }
+
+    private boolean lockUser(Long userId) {
+        // Every crop write uses this lock before reading mutable crop state.
+        // Spring retains the database lock until this public method commits or rolls back.
+        return userId != null && farmCropMapper.lockUserById(userId) != null;
+    }
+
+    private void activateCrop(Long cropId, Long userId) {
+        requireSingleRow(farmCropMapper.setActiveCrop(cropId, userId), "设置当前作物");
+    }
+
+    private void requireSingleRow(int affectedRows, String operation) {
+        if (affectedRows != 1) {
+            throw new IllegalStateException(operation + "失败，数据已发生变化，请重试");
+        }
     }
 
     private void normalizeCrop(FarmCrop crop) {

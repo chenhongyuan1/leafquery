@@ -63,7 +63,7 @@ flowchart LR
 
 ## 识别与复核规则
 
-YOLO 输出的类别编号先由 Python 转换为训练类别中的英文名称，再通过 [类别元数据配置](docs/detection_target_metadata.json) 映射为中文业务名称。Java 与 Python 共同读取这份 JSON 配置，以避免两端分别维护类别列表。
+YOLO 输出的类别编号先由 Python 转换为训练类别中的英文名称，再通过 [类别元数据配置](config/detection_target_metadata.json) 映射为中文业务名称。Java 与 Python 共同读取这份 JSON 配置，以避免两端分别维护类别列表。
 
 当前识别门控逻辑如下：
 
@@ -124,7 +124,8 @@ leafquery/
 ├── python_service/                       # Flask + YOLO 推理服务及 best.pt
 ├── user-frontend/                         # 移动端与 PC 用户端
 ├── admin-frontend/                       # 独立运营管理后台
-├── docs/                                 # 类别配置与项目资料
+├── config/                               # Java / Python 共用元数据
+├── docs/                                 # 设计、运行与实验说明
 ├── .env.example                          # 本机环境变量模板
 ├── .env.production.example               # 服务器环境变量模板
 ├── start-all.cmd                         # Windows 一键启动入口
@@ -200,7 +201,7 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 | `SPRING_PROFILES_ACTIVE` | 本地 `dev`，服务器 `prod` |
 | `DB_URL`、`DB_USERNAME`、`DB_PASSWORD` | MySQL 连接 |
 | `PYTHON_AI_URL` | Python `/predict` 服务地址 |
-| `DETECTION_METADATA_PATH` | 类别元数据 JSON 路径 |
+| `DETECTION_METADATA_PATH` | 类别元数据 JSON 路径，默认 `./config/detection_target_metadata.json` |
 | `UPLOAD_DIR` | 本地图片存储目录 |
 | `YOLO_DETECTION_BOX_THRESHOLD` | 检测框候选阈值 |
 | `YOLO_DETECTION_PRIMARY_THRESHOLD` | 主目标可信阈值 |
@@ -298,7 +299,7 @@ chmod 600 .env.production
 | `DB_USERNAME`、`DB_PASSWORD` | 服务器专用数据库账号和密码 |
 | `UPLOAD_DIR` | `/srv/leafquery/uploads`，作为持久化目录保留 |
 | `PYTHON_AI_URL` | 本例为 `http://127.0.0.1:5000/predict` |
-| `DETECTION_METADATA_PATH` | `/opt/leafquery/docs/detection_target_metadata.json` |
+| `DETECTION_METADATA_PATH` | `/opt/leafquery/config/detection_target_metadata.json` |
 | `SERVER_ADDRESS`、`SERVER_PORT` | 本例为 `127.0.0.1`、`8080` |
 
 Dify、豆包、天气和语音变量按实际启用的功能填写。使用 UTF-8 无 BOM 保存环境文件，每行写 `变量名=值`；密钥可用引号包住，天气私钥使用单行 Base64。systemd 的环境文件解析规则与本地启动器不同，勿直接套用本地的 `\n` 转义格式。
@@ -333,7 +334,7 @@ After=network.target
 [Service]
 User=leafquery
 WorkingDirectory=/opt/leafquery/python_service
-Environment=DETECTION_METADATA_PATH=/opt/leafquery/docs/detection_target_metadata.json
+Environment=DETECTION_METADATA_PATH=/opt/leafquery/config/detection_target_metadata.json
 ExecStart=/opt/leafquery/python_service/.venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 1 --timeout 180 app:app
 Restart=on-failure
 

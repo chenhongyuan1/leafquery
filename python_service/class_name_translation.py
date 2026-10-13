@@ -23,7 +23,7 @@ def _catalog_path() -> str:
         
     return os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "docs",
+        "config",
         "detection_target_metadata.json",
     )
 

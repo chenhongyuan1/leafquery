@@ -32,7 +32,7 @@ public class DetectionSelectionService {
     /** 兜底值：JSON 加载失败时使用 */
     private static final Set<String> FALLBACK_YOLO_SUPPORTED = Set.of("水稻", "玉米", "小麦", "虫害");
 
-    @Value("${detection.metadata.path:./docs/detection_target_metadata.json}")
+    @Value("${detection.metadata.path:./config/detection_target_metadata.json}")
     private String metadataPath;
 
     private Set<String> yoloSupported;

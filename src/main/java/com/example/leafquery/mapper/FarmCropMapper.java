@@ -8,6 +8,8 @@ import java.util.List;
 
 @Mapper
 public interface FarmCropMapper {
+    Long lockUserById(@Param("userId") Long userId);
+
     List<FarmCrop> selectByUserId(@Param("userId") Long userId);
 
     FarmCrop selectByCropId(@Param("cropId") Long cropId);
