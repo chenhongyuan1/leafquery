@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { diagnosisApi, recordApi } from '../../api/index.js'
 import { useSettingsStore } from '../../stores/settings'
 import { AUTH_CHANGE_EVENT, getStoredUser } from '../../utils/accountSecurity'
 import {
@@ -95,10 +95,7 @@ const speakLastReply = async () => {
 
   isTtsLoading.value = true
   try {
-    const response = await axios.post('/api/ai/text-to-speech', 
-      { text: plainText },
-      { responseType: 'blob' }
-    )
+    const response = await diagnosisApi.textToSpeech({ text: plainText }, { responseType: 'blob' })
     const blob = new Blob([response.data], { type: 'audio/mpeg' })
     const url = URL.createObjectURL(blob)
     currentAudio = new Audio(url)
@@ -473,7 +470,7 @@ const stopRecording = async () => {
   formData.append('dialect', settingsStore.selectedDialect)
 
   try {
-    const response = await axios.post('/api/ai/speech-to-text', formData, {
+    const response = await diagnosisApi.speechToText(formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     const text = response.data.text || ''
@@ -552,7 +549,7 @@ const historyItems = ref(JSON.parse(localStorage.getItem('leafquery_history') ||
 
 const refreshNotificationBadge = async () => {
   try {
-    const announcements = await fetchAnnouncements('/api/discovery/announcements')
+    const announcements = await fetchAnnouncements()
     const localReadIds = getLocalAnnouncementReadIds()
     hasNewNotification.value = announcements.some(item => !isAnnouncementRead(item, localReadIds))
   } catch (error) {
@@ -563,7 +560,7 @@ const refreshNotificationBadge = async () => {
 
 const refreshPopupAnnouncement = async () => {
   try {
-    const popupAnnouncements = await fetchAnnouncements('/api/discovery/announcements/popup')
+    const popupAnnouncements = await fetchAnnouncements({ popup: true })
     const currentUser = getStoredUser()
     if (currentUser?.userId) {
       popupAnnouncement.value = popupAnnouncements.find(item => !Boolean(item.read)) || null
@@ -587,7 +584,7 @@ onMounted(async () => {
   try {
     const user = getStoredUser()
     if (user?.userId) {
-      const response = await axios.get(`/api/record/list?userId=${user.userId}`)
+      const response = await recordApi.list(user.userId)
       if (response.data && response.data.code === 200) {
         historyItems.value = response.data.data.map(item => ({
           id: item.id,
@@ -674,7 +671,7 @@ const persistFinalizedDetection = async result => {
     if (userStr) {
       const user = JSON.parse(userStr)
       if (user && user.userId) {
-        await axios.post('/api/record/add', {
+        await recordApi.add({
           userId: user.userId,
           pestName: result.pestName,
           confidence: result.confidence,
@@ -724,7 +721,7 @@ const onScanFileSelected = async (event) => {
     formData.append('categories', selectedCategories.value.join(','))
     formData.append('locationId', '101010100')
 
-    const response = await axios.post('/api/pest/identify', formData, {
+    const response = await diagnosisApi.identify(formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000
     })
@@ -850,7 +847,7 @@ const generateReport = async () => {
       params.append('reviewResult', detectionResult.value.reviewResult)
     }
 
-    const response = await axios.post('/api/pest/diagnose', params, { timeout: 300000 })
+    const response = await diagnosisApi.diagnose(params, { timeout: 300000 })
     const report = response.data.report || ''
 
     detectionResult.value.report = report
@@ -891,7 +888,7 @@ const sendMessage = async () => {
   pendingImage.value = ''
 
   try {
-    const response = await axios.post('/api/ai/chat', {
+    const response = await diagnosisApi.chat({
       pestName: diagnosisContextName.value,
       messages: messages.value.map(m => ({ role: m.role, content: m.content, imageBase64: m.imageBase64 }))
     })

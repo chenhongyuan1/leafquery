@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmStore'
 import { resolveEffectiveStage } from '../../stores/farmUtils'
-import axios from 'axios'
+import { trendApi } from '../../api/index.js'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -96,7 +96,7 @@ async function fetchTargets() {
 
   targetsLoading.value = true
   try {
-    const response = await axios.get('/api/trend/targets', { params: { crop: crop.name } })
+    const response = await trendApi.targets(crop.name)
     const options = {
       diseaseTargets: response.data?.diseaseTargets || [],
       pestTargets: response.data?.pestTargets || []
@@ -154,7 +154,7 @@ async function fetchPrediction() {
       reportRiskHint: 0
     }
 
-    const response = await axios.post('/api/trend/forecast', reqBody)
+    const response = await trendApi.forecast(reqBody)
     const data = response.data
     if (data?.supported === false) {
       predictionData.value = null

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, markRaw, nextTick } from 'vue'
-import axios from 'axios'
+import { userApi } from '../api/index.js'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { useFarmStore } from '../stores/farmStore'
 import {
@@ -113,7 +113,7 @@ const popupAnnouncement = ref(null)
 
 const refreshPopupAnnouncement = async () => {
   try {
-    const popupAnnouncements = await fetchAnnouncements('/api/discovery/announcements/popup')
+    const popupAnnouncements = await fetchAnnouncements({ popup: true })
     if (currentUser.value?.userId) {
       popupAnnouncement.value = popupAnnouncements.find(item => !Boolean(item.read)) || null
     } else {
@@ -165,7 +165,7 @@ const handleAuthSubmit = async () => {
   errorMessage.value = ''
   try {
     if (isLoginMode.value) {
-      const res = await axios.post('/api/user/login', { username: loginForm.value.username, password: loginForm.value.password })
+      const res = await userApi.login({ username: loginForm.value.username, password: loginForm.value.password })
       if (res.data.code === 200) {
         currentUser.value = res.data.data
         persistUser(res.data.data)
@@ -177,7 +177,7 @@ const handleAuthSubmit = async () => {
         loginForm.value = { username: '', password: '', confirmPassword: '', phoneNumber: '' }
       }
     } else {
-      const res = await axios.post('/api/user/register', {
+      const res = await userApi.register({
         username: loginForm.value.username, password: loginForm.value.password,
         phoneNumber: loginForm.value.phoneNumber,
         avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + loginForm.value.username

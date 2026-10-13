@@ -1,8 +1,11 @@
 import axios from 'axios'
+import { installResponseHandling } from '../../frontend-shared/apiErrors.js'
+
+export { ApiError, getApiErrorMessage } from '../../frontend-shared/apiErrors.js'
 
 const environment = import.meta.env || {}
 const api = axios.create({
-  baseURL: (environment.VITE_API_BASE_URL || 'http://localhost:8080') + '/api/admin',
+  baseURL: (environment.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '') + '/api/admin',
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' }
 })
@@ -16,15 +19,14 @@ api.interceptors.request.use(config => {
   return config
 })
 
-api.interceptors.response.use(response => response, error => {
-  if (error.response?.status === 401 && error.config?.url !== '/login') {
+installResponseHandling(api, { onUnauthorized: config => {
+  if (config?.url !== '/login') {
     sessionStorage.removeItem('admin_token')
     sessionStorage.removeItem('admin')
     localStorage.removeItem('admin')
     const loginPath = `${environment.BASE_URL || '/'}login`
     if (window.location.pathname !== loginPath) window.location.assign(loginPath)
   }
-  return Promise.reject(error)
-})
+} })
 
 export default api

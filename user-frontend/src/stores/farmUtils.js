@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { ApiError } from '../api/index.js'
 
 export const LOCAL_STORAGE_KEY = 'farm_data_local'
 export const CLOUD_CACHE_KEY = 'farm_data_cloud'
@@ -16,7 +16,7 @@ export const parseJson = (value, fallback) => {
 export const hasChineseText = (value) => typeof value === 'string' && /[\u4e00-\u9fff]/.test(value)
 
 export const getFriendlySyncError = (error, fallbackMessage) => {
-  if (axios.isAxiosError(error)) {
+  if ((error instanceof ApiError)) {
     const status = error.response?.status
     const serverMessage = error.response?.data?.message
 

@@ -30,7 +30,7 @@ const loadAnnouncements = async () => {
   localReadIds.value = getLocalAnnouncementReadIds()
 
   try {
-    announcements.value = await fetchAnnouncements('/api/discovery/announcements')
+    announcements.value = await fetchAnnouncements()
   } catch (error) {
     console.error('Failed to load announcements', error)
     announcements.value = []

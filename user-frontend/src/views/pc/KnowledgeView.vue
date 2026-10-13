@@ -1,12 +1,11 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import axios from 'axios'
+import { discoveryApi } from '../../api/index.js'
 import NewsCard from '../../components/mobile/NewsCard.vue'
 import QnACard from '../../components/mobile/QnACard.vue'
 import { useFavoritesStore } from '../../stores/favoritesStore'
 import { AUTH_CHANGE_EVENT, getStoredUser as readStoredUser, requireLoggedInUser } from '../../utils/accountSecurity'
 
-const API_BASE = '/api/discovery'
 
 const favStore = useFavoritesStore()
 
@@ -96,7 +95,7 @@ const getConditionColor = (conditionType) => {
 
 const fetchNews = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/news`)
+    const { data } = await discoveryApi.news()
     newsData.value = (data.data || []).map(item => ({
       ...item,
       type: 'news',
@@ -111,7 +110,7 @@ const fetchNews = async () => {
 
 const fetchPlants = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/plants`)
+    const { data } = await discoveryApi.plants()
     plantsData.value = (data.data || []).map(item => ({
       ...item,
       id: `plant_${item.plantId}`,
@@ -126,8 +125,8 @@ const fetchPlants = async () => {
 const fetchKnowledge = async (plantId) => {
   loading.value = true
   try {
-    const url = plantId ? `${API_BASE}/knowledge?plantId=${plantId}` : `${API_BASE}/knowledge`
-    const { data } = await axios.get(url)
+
+    const { data } = await discoveryApi.knowledge(plantId)
     knowledgeData.value = (data.data || []).map(item => ({
       ...item,
       type: 'library',
@@ -147,7 +146,7 @@ const fetchKnowledge = async (plantId) => {
 
 const fetchQna = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/qna`)
+    const { data } = await discoveryApi.posts()
     qnaData.value = (data.data || []).map(item => ({
       ...item,
       type: 'qna',
@@ -175,7 +174,7 @@ const fetchLikedPostIds = async () => {
   try {
     const user = currentUser.value
     if (!user?.userId) return
-    const { data } = await axios.get(`${API_BASE}/qna/liked?userId=${user.userId}`)
+    const { data } = await discoveryApi.likedPosts(user.userId)
     if (data.code === 200 && Array.isArray(data.data)) {
       likedPostIds.value = new Set(data.data)
     }
@@ -272,7 +271,7 @@ const onFileSelection = async (event) => {
     for (const file of files) {
       const formData = new FormData()
       formData.append('file', file)
-      const response = await axios.post(`${API_BASE}/upload`, formData, {
+      const response = await discoveryApi.upload(formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       if (response.data?.code === 200 && response.data.data) {
@@ -292,7 +291,7 @@ const submitPost = async () => {
   if (!currentUser.value?.userId || !postText.value.trim()) return
 
   try {
-    await axios.post(`${API_BASE}/qna`, {
+    await discoveryApi.createPost({
       userId: currentUser.value.userId,
       content: postText.value.trim(),
       images: JSON.stringify(postImages.value)
@@ -312,7 +311,7 @@ const deletePost = async (postId) => {
   if (!confirm('确定要删除这条提问吗？')) return
 
   try {
-    const response = await axios.delete(`${API_BASE}/qna/${postId}`)
+    const response = await discoveryApi.removePost(postId)
     if (response.data?.code === 200) {
       if (selectedQnaItem.value?.id === postId) {
         selectedQnaItem.value = null

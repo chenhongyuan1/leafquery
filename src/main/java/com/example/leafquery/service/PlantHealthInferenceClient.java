@@ -5,14 +5,22 @@ import com.example.leafquery.dto.PredictionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.List;
 
 /**
@@ -27,8 +35,10 @@ public class PlantHealthInferenceClient {
     private final RestTemplate restTemplate;
     private final String pythonServiceUrl;
 
-    public PlantHealthInferenceClient(@Value("${python.service.url}") String pythonServiceUrl) {
-        this.restTemplate = new RestTemplate();
+    public PlantHealthInferenceClient(
+            @Qualifier("plantHealthRestTemplate") RestTemplate restTemplate,
+            @Value("${python.service.url}") String pythonServiceUrl) {
+        this.restTemplate = restTemplate;
         this.pythonServiceUrl = pythonServiceUrl;
     }
 
@@ -68,12 +78,26 @@ public class PlantHealthInferenceClient {
                     PredictionResult.class);
 
             PredictionResult result = response.getBody();
+            if (result == null || !StringUtils.hasText(result.getPestName())) {
+                throw new PlantHealthInferenceException(PlantHealthInferenceException.Reason.INVALID_RESPONSE, null);
+            }
             log.info("Python 预测结果: {}", result);
             return result;
 
-        } catch (Exception e) {
-            log.error("调用 Python 预测服务失败", e);
-            throw new RuntimeException("植物健康推理服务调用失败: " + e.getMessage(), e);
+        } catch (ResourceAccessException e) {
+            PlantHealthInferenceException.Reason reason = isTimeout(e)
+                    ? PlantHealthInferenceException.Reason.TIMEOUT
+                    : PlantHealthInferenceException.Reason.UNAVAILABLE;
+            log.warn("Python inference transport failed: {}", reason);
+            throw new PlantHealthInferenceException(reason, e);
+        } catch (RestClientResponseException e) {
+            log.warn("Python inference returned HTTP {}", e.getStatusCode().value());
+            throw new PlantHealthInferenceException(PlantHealthInferenceException.Reason.UPSTREAM_ERROR, e);
+        } catch (RestClientException e) {
+            log.warn("Python inference response could not be decoded");
+            throw new PlantHealthInferenceException(PlantHealthInferenceException.Reason.INVALID_RESPONSE, e);
+        } catch (IOException e) {
+            throw new IllegalStateException("读取上传图片失败", e);
         }
     }
 
@@ -82,5 +106,15 @@ public class PlantHealthInferenceClient {
      */
     public PredictionResult predict(MultipartFile imageFile) {
         return predict(imageFile, null);
+    }
+
+    private boolean isTimeout(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException) {
+                return true;
+            }
+            if (cause.getCause() == cause) { break; }
+        }
+        return false;
     }
 }

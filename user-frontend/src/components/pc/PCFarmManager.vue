@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import axios from 'axios'
+import { farmApi } from '../../api/index.js'
 import { useFarmStore } from '../../stores/farmStore'
 import { cropPhenologyMap, getDefaultStage } from '../../constants/farmCatalog'
 
@@ -161,7 +161,7 @@ const searchLocation = async () => {
   searchResults.value = []
 
   try {
-    const response = await axios.get(`/api/location/search?query=${encodeURIComponent(query)}`)
+    const response = await farmApi.searchLocations(query)
     searchResults.value = response.data || []
     if (!searchResults.value.length) {
       formError.value = '未找到匹配地区，请尝试更换城市名称。'

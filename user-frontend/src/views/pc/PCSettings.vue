@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { recordApi } from '../../api/index.js'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmStore'
 
@@ -20,7 +20,7 @@ const coveredAreaCount = computed(() => {
 const fetchStats = async () => {
   if (currentUser.value && currentUser.value.userId) {
     try {
-      const res = await axios.get(`/api/record/list?userId=${currentUser.value.userId}`)
+      const res = await recordApi.list(currentUser.value.userId)
       if (res.data?.code === 200) {
         const history = res.data.data
         recordCount.value = history.length

@@ -1,12 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { discoveryApi } from '../../api/index.js'
 import NewsCard from '../../components/mobile/NewsCard.vue'
 import QnACard from '../../components/mobile/QnACard.vue'
 import { useFavoritesStore } from '../../stores/favoritesStore'
 
 const favStore = useFavoritesStore()
-const API_BASE = '/api/discovery'
+
 
 const categories = ['推荐资讯', '知识图鉴', '问答圈']
 const activeCategory = ref(0)
@@ -31,21 +31,21 @@ onMounted(async () => {
 
 const fetchNews = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/news`)
+    const { data } = await discoveryApi.news()
     newsData.value = (data.data || []).map(item => ({ ...item, type:'news', id: item.newsId, date: formatTime(item.createdAt) }))
   } catch(e) {}
 }
 const fetchPlants = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/plants`)
+    const { data } = await discoveryApi.plants()
     plantsData.value = (data.data || []).map(item => ({ ...item, id: 'p'+item.plantId, name: item.name, desc: item.description }))
   } catch(e) {}
 }
 const fetchKnowledge = async (plantId) => {
   loading.value = true
   try {
-    const url = plantId ? `${API_BASE}/knowledge?plantId=${plantId}` : `${API_BASE}/knowledge`
-    const { data } = await axios.get(url)
+
+    const { data } = await discoveryApi.knowledge(plantId)
     knowledgeData.value = (data.data || []).map(item => ({
       ...item, type: 'library', id: item.knowledgeId, title: item.title, image: item.imageUrl, prevention: safeParseJSON(item.prevention)
     }))
@@ -55,7 +55,7 @@ const fetchKnowledge = async (plantId) => {
 }
 const fetchQna = async () => {
   try {
-    const { data } = await axios.get(`${API_BASE}/qna`)
+    const { data } = await discoveryApi.posts()
     qnaData.value = (data.data || []).map(item => ({
       ...item, type:'qna', id: item.postId, user: item.userName, time: formatTime(item.createdAt), images: safeParseJSON(item.images), expertReply: item.expertReply ? { expertName: item.expertName, content: item.expertReply } : null
     }))

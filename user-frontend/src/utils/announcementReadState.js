@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { discoveryApi } from '../api/index.js'
 import { getStoredUser } from './accountSecurity'
 
 const READ_STORAGE_KEY = 'read_announcements'
@@ -33,10 +33,10 @@ export const getLocalAnnouncementReadIds = () => readIdList(READ_STORAGE_KEY)
 
 export const getLocalDismissedPopupIds = () => readIdList(DISMISSED_POPUP_STORAGE_KEY)
 
-export const fetchAnnouncements = async (path = '/api/discovery/announcements') => {
+export const fetchAnnouncements = async ({ popup = false } = {}) => {
   const user = getStoredUser()
-  const params = user?.userId ? { userId: user.userId } : {}
-  const { data } = await axios.get(path, { params })
+
+  const { data } = await discoveryApi.announcements(user?.userId, popup)
 
   if (data?.code !== 200) {
     throw new Error(data?.message || '加载公告失败')
@@ -62,7 +62,7 @@ export const markAnnouncementAsRead = async (announcementId) => {
 
   const user = getStoredUser()
   if (user?.userId) {
-    const { data } = await axios.post(`/api/discovery/announcements/${id}/read`, {
+    const { data } = await discoveryApi.markRead(id, {
       userId: user.userId
     })
 

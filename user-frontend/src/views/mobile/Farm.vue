@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmStore'
-import axios from 'axios'
+import { farmApi } from '../../api/index.js'
 import { cropPhenologyMap, getDefaultStage } from '../../constants/farmCatalog'
 
 const router = useRouter()
@@ -384,7 +384,7 @@ const handleSearchLocation = async () => {
   resetFormError()
 
   try {
-    const response = await axios.get(`/api/location/search?query=${encodeURIComponent(query)}`)
+    const response = await farmApi.searchLocations(query)
     searchResults.value = response.data || []
   } catch (error) {
     console.error('Failed to search location', error)

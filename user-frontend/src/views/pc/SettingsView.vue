@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import axios from 'axios'
+import { recordApi, userApi } from '../../api/index.js'
 import { useFarmStore } from '../../stores/farmStore'
 import { useFavoritesStore } from '../../stores/favoritesStore'
 import PCFarmManager from '../../components/pc/PCFarmManager.vue'
@@ -67,7 +67,7 @@ const submitEditUsername = async () => {
   editUsernameLoading.value = true
   editUsernameError.value = ''
   try {
-    const res = await axios.put('/api/user/update-username', {
+    const res = await userApi.updateUsername({
       userId: currentUser.value.userId,
       username: newName
     })
@@ -232,7 +232,7 @@ const loadRecords = async () => {
   }
 
   try {
-    const response = await axios.get(`/api/record/list?userId=${currentUser.value.userId}`)
+    const response = await recordApi.list(currentUser.value.userId)
     if (response.data?.code === 200) {
       const records = response.data.data || []
       farmStore.syncIdentificationHistory(records)

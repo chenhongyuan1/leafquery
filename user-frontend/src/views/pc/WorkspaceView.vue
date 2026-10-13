@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import axios from 'axios'
+import { diagnosisApi } from '../../api/index.js'
 import { useFarmStore } from '../../stores/farmStore'
 import {
   formatConfidencePercent,
@@ -221,7 +221,7 @@ const processFile = async (file) => {
     formData.append('categories', selectedCategories.value.join(','))
     formData.append('locationId', getLocationId())
 
-    const response = await axios.post('/api/pest/identify', formData, {
+    const response = await diagnosisApi.identify(formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000
     })
@@ -324,7 +324,7 @@ const generateReport = async () => {
       params.append('reviewResult', detectionResult.value.reviewResult)
     }
 
-    const response = await axios.post('/api/pest/diagnose', params, { timeout: 300000 })
+    const response = await diagnosisApi.diagnose(params, { timeout: 300000 })
     const report = response.data.report || ''
 
     detectionResult.value.report = report
@@ -359,7 +359,7 @@ const sendMessage = async () => {
 
   isSending.value = true
   try {
-    const response = await axios.post('/api/ai/chat', {
+    const response = await diagnosisApi.chat({
       pestName: diagnosisContextName.value,
       messages: messages.value.map(m => ({ role: m.role, content: m.content, imageBase64: m.rawBase64 }))
     })

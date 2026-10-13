@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import { recordApi, trendApi } from '../../api/index.js'
 import { useFarmStore } from '../../stores/farmStore'
 import { resolveEffectiveStage } from '../../stores/farmUtils'
 import PCFarmManager from '../../components/pc/PCFarmManager.vue'
@@ -343,7 +343,7 @@ const loadTrendTargets = async () => {
 
   targetsLoading.value = true
   try {
-    const response = await axios.get('/api/trend/targets', { params: { crop: crop.name } })
+    const response = await trendApi.targets(crop.name)
     const options = {
       diseaseTargets: response.data?.diseaseTargets || [],
       pestTargets: response.data?.pestTargets || []
@@ -372,7 +372,7 @@ const loadRecords = async () => {
     return
   }
   try {
-    const response = await axios.get(`/api/record/list?userId=${currentUser.value.userId}`)
+    const response = await recordApi.list(currentUser.value.userId)
     if (response.data?.code === 200) {
       const rows = response.data.data || []
       farmStore.syncIdentificationHistory(rows)
@@ -427,7 +427,7 @@ const refreshClimate = async () => {
   forecastError.value = ''
   weatherError.value = ''
   await Promise.all([
-    Promise.allSettled(allTargetDefinitions.value.map((definition) => axios.post('/api/trend/forecast', {
+    Promise.allSettled(allTargetDefinitions.value.map((definition) => trendApi.forecast({
       crop: target.crop,
       disease: definition.targetType === 'DISEASE' ? definition.targetName : null,
       targetType: definition.targetType,
@@ -469,7 +469,7 @@ const refreshClimate = async () => {
     }).finally(() => {
       forecastLoading.value = false
     }),
-    axios.get(`/api/weather/features?locationId=${encodeURIComponent(target.regionCode)}`).then((response) => {
+    trendApi.weatherFeatures(target.regionCode).then((response) => {
       weatherFeatures.value = response.data || null
     }).catch((error) => {
       console.error('Failed to fetch weather features for PC data center', error)

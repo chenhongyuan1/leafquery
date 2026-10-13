@@ -2,7 +2,7 @@ export { useFavoritesStore } from './favoritesStore'
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import axios from 'axios'
+import { favoriteApi } from '../api/index.js'
 import { getStoredUser } from '../utils/accountSecurity'
 
 const useFavoritesStoreLegacy = defineStore('favorites-legacy', () => {
@@ -35,7 +35,7 @@ const useFavoritesStoreLegacy = defineStore('favorites-legacy', () => {
         try {
             const user = getStoredUser()
             if (user?.userId) {
-                await axios.post('/api/favorite/toggle', {
+                await favoriteApi.toggle({
                     userId: user.userId,
                     itemType: item.type,
                     itemId: String(item.id),
@@ -64,7 +64,7 @@ const useFavoritesStoreLegacy = defineStore('favorites-legacy', () => {
             return
         }
         try {
-            const response = await axios.get(`/api/favorite/list?userId=${userId}`)
+            const response = await favoriteApi.list(userId)
             if (response.data && response.data.code === 200) {
                 const data = response.data.data || []
                 const newSet = new Set()

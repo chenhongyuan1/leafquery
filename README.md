@@ -201,6 +201,8 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 | `SPRING_PROFILES_ACTIVE` | 本地 `dev`，服务器 `prod` |
 | `DB_URL`、`DB_USERNAME`、`DB_PASSWORD` | MySQL 连接 |
 | `PYTHON_AI_URL` | Python `/predict` 服务地址 |
+| `PYTHON_CONNECT_TIMEOUT_MS` | Java 连接 Python 的超时，正整数毫秒，默认 `3000` |
+| `PYTHON_READ_TIMEOUT_MS` | Java 等待 Python 返回数据的读取超时，正整数毫秒，默认 `30000` |
 | `DETECTION_METADATA_PATH` | 类别元数据 JSON 路径，默认 `./config/detection_target_metadata.json` |
 | `UPLOAD_DIR` | 本地图片存储目录 |
 | `YOLO_DETECTION_BOX_THRESHOLD` | 检测框候选阈值 |
@@ -299,6 +301,7 @@ chmod 600 .env.production
 | `DB_USERNAME`、`DB_PASSWORD` | 服务器专用数据库账号和密码 |
 | `UPLOAD_DIR` | `/srv/leafquery/uploads`，作为持久化目录保留 |
 | `PYTHON_AI_URL` | 本例为 `http://127.0.0.1:5000/predict` |
+| `PYTHON_CONNECT_TIMEOUT_MS`、`PYTHON_READ_TIMEOUT_MS` | 默认 `3000` / `30000` 毫秒，按服务器实际推理耗时调整 |
 | `DETECTION_METADATA_PATH` | `/opt/leafquery/config/detection_target_metadata.json` |
 | `SERVER_ADDRESS`、`SERVER_PORT` | 本例为 `127.0.0.1`、`8080` |
 

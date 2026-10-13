@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import { farmApi, recordApi } from '../api/index.js'
 import { cropLibrary, getCropMeta } from '../constants/farmCatalog'
 
 import {
@@ -155,7 +155,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
   }
 
   const loadRemoteCrops = async (userId) => {
-    const response = await axios.get(`/api/farm/crops?userId=${userId}`)
+    const response = await farmApi.list(userId)
     if (response.data?.code !== 200) {
       throw new Error(response.data?.message || 'Failed to load crops from cloud')
     }
@@ -163,7 +163,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
   }
 
   const loadRemoteHistory = async (userId) => {
-    const response = await axios.get(`/api/record/list?userId=${userId}`)
+    const response = await recordApi.list(userId)
     if (response.data?.code !== 200) {
       throw new Error(response.data?.message || 'Failed to load records from cloud')
     }
@@ -330,7 +330,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
   }
 
   const estimatePhenology = async (payload) => {
-    const response = await axios.post('/api/farm/phenology/estimate', payload)
+    const response = await farmApi.estimate(payload)
     return response.data
   }
 
@@ -343,7 +343,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
 
     try {
       const stageMode = normalizeStageMode(options.stageMode, 'AUTO')
-      await axios.post('/api/farm/crops', {
+      await farmApi.create({
         userId: user.userId,
         cropName,
         stage: options.stage || '',
@@ -377,7 +377,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      await axios.put(`/api/farm/crops/${cropId}`, {
+      await farmApi.update(cropId, {
         userId: user.userId,
         stage: updates.stage,
         sowingDate: updates.sowingDate ?? null,
@@ -409,7 +409,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      await axios.delete(`/api/farm/crops/${cropId}?userId=${user.userId}`)
+      await farmApi.remove(cropId, user.userId)
       await Promise.all([
         loadRemoteCrops(user.userId),
         loadRemoteHistory(user.userId)
@@ -430,7 +430,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      await axios.put(`/api/farm/crops/${cropId}/active`, {
+      await farmApi.activate(cropId, {
         userId: user.userId
       })
       await loadRemoteCrops(user.userId)
@@ -490,7 +490,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      const response = await axios.post('/api/record/add', payload)
+      const response = await recordApi.add(payload)
       if (response.data?.code !== 200) {
         throw new Error(response.data?.message || 'Failed to save record')
       }
@@ -518,7 +518,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      await axios.delete(`/api/record/${recordId}`)
+      await recordApi.remove(recordId)
       await loadRemoteHistory(user.userId)
       syncMode.value = 'cloud'
       return true
@@ -542,7 +542,7 @@ export const useFarmStore = defineStore('farm-cloud', () => {
     }
 
     try {
-      await axios.delete(`/api/record/clear?userId=${user.userId}`)
+      await recordApi.clear(user.userId)
       await loadRemoteHistory(user.userId)
       syncMode.value = 'cloud'
       return true

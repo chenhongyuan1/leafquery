@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { ApiError, userApi } from '../api/index.js'
 
 const USER_STORAGE_KEY = 'user'
 export const AUTH_CHANGE_EVENT = 'leafquery-auth-changed'
@@ -48,7 +48,7 @@ export const persistUser = (user) => {
 }
 
 export const getAccountErrorMessage = (error, fallback = '操作失败，请稍后重试') => {
-  if (axios.isAxiosError(error)) {
+  if ((error instanceof ApiError)) {
     return error.response?.data?.message || fallback
   }
 
@@ -60,7 +60,7 @@ export const getAccountErrorMessage = (error, fallback = '操作失败，请稍�
 }
 
 export const changePassword = async ({ userId, currentPassword, newPassword }) => {
-  const response = await axios.put('/api/user/password', {
+  const response = await userApi.changePassword({
     userId,
     currentPassword,
     newPassword
@@ -78,7 +78,7 @@ export const changePassword = async ({ userId, currentPassword, newPassword }) =
 }
 
 export const deleteAccount = async ({ userId, currentPassword }) => {
-  const response = await axios.post('/api/user/delete-account', {
+  const response = await userApi.deleteAccount({
     userId,
     currentPassword
   })

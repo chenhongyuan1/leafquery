@@ -6,6 +6,7 @@ import com.example.leafquery.service.DetectionSelectionService;
 import com.example.leafquery.service.DifyService;
 import com.example.leafquery.service.LocalImageStorageService;
 import com.example.leafquery.service.PlantHealthInferenceClient;
+import com.example.leafquery.service.PlantHealthInferenceException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,6 +115,8 @@ public class PestDetectionController {
 
             return ResponseEntity.ok(response);
 
+        } catch (PlantHealthInferenceException e) {
+            return inferenceFailure(e);
         } catch (Exception e) {
             log.error("Identification request failed", e);
             return ResponseEntity.internalServerError()
@@ -195,10 +198,18 @@ public class PestDetectionController {
             response.setReport("");
 
             return ResponseEntity.ok(response);
+        } catch (PlantHealthInferenceException e) {
+            return inferenceFailure(e);
         } catch (Exception e) {
             log.error("Detection request failed", e);
             return ResponseEntity.internalServerError()
                     .body(Map.of("error", e.getMessage() == null ? "识别失败" : e.getMessage()));
         }
+    }
+
+    private ResponseEntity<?> inferenceFailure(PlantHealthInferenceException error) {
+        log.warn("Inference request failed: {}", error.getErrorCode());
+        return ResponseEntity.status(error.getHttpStatus())
+                .body(Map.of("error", error.getMessage(), "error_code", error.getErrorCode()));
     }
 }

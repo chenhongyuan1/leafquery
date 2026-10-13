@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch, onUnmounted } from 'vue'
-import axios from 'axios'
+import { recordApi, userApi } from '../../api/index.js'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmStore'
 import { useFavoritesStore } from '../../stores/favoritesStore'
@@ -65,7 +65,7 @@ const submitEditUsername = async () => {
   editUsernameLoading.value = true
   editUsernameError.value = ''
   try {
-    const res = await axios.put('/api/user/update-username', {
+    const res = await userApi.updateUsername({
       userId: currentUser.value.userId,
       username: newName
     })
@@ -132,7 +132,7 @@ const resetStats = () => {
 const fetchStats = async () => {
   if (currentUser.value && currentUser.value.userId) {
     try {
-      const res = await axios.get(`/api/record/list?userId=${currentUser.value.userId}`)
+      const res = await recordApi.list(currentUser.value.userId)
       if (res.data && res.data.code === 200) {
         const history = res.data.data
         recordCount.value = history.length
@@ -217,7 +217,7 @@ const handleSubmit = async () => {
   try {
     if (isLoginMode.value) {
       // 登录请求
-      const res = await axios.post('/api/user/login', {
+      const res = await userApi.login({
         username: form.username,
         password: form.password
       })
@@ -232,7 +232,7 @@ const handleSubmit = async () => {
       }
     } else {
       // 注册请求
-      const res = await axios.post('/api/user/register', {
+      const res = await userApi.register({
         username: form.username,
         password: form.password,
         phoneNumber: form.phoneNumber,

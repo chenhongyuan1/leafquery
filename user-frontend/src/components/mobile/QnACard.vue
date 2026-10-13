@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import axios from 'axios'
+import { discoveryApi } from '../../api/index.js'
 import { requireLoggedInUser } from '../../utils/accountSecurity'
 
 const props = defineProps({
@@ -57,7 +57,7 @@ const toggleLike = async () => {
   localLikes.value += isLiked.value ? 1 : -1
 
   try {
-    const res = await axios.post(`/api/discovery/qna/${props.id}/like`, {
+    const res = await discoveryApi.likePost(props.id, {
       userId: user.userId
     })
     if (res.data.code === 200) {
@@ -82,7 +82,7 @@ const submitComment = async () => {
   if (!user) return
   commentSubmitting.value = true
   try {
-    const res = await axios.post(`/api/discovery/qna/${props.id}/comment`, {
+    const res = await discoveryApi.comment(props.id, {
       userId: user.userId,
       content: newComment.value
     })
@@ -122,7 +122,7 @@ const submitComment = async () => {
 const deleteCommentObj = async (commentId, idx) => {
   if (!confirm('确定要删除这条评论吗？')) return
   try {
-    await axios.delete(`/api/discovery/qna/comment/${commentId}`)
+    await discoveryApi.removeComment(commentId)
     props.comments.splice(idx, 1)
   } catch (e) {
     alert('删除评论失败')
@@ -132,7 +132,7 @@ const deleteCommentObj = async (commentId, idx) => {
 const deleteExpertReplyObj = async () => {
   if (!confirm('确定要撤销这条专家解答吗？')) return
   try {
-    await axios.delete(`/api/discovery/qna/${props.id}/expert-reply`)
+    await discoveryApi.removeExpertReply(props.id)
     localExpertReply.value = null
     emit('refresh')
   } catch (e) {
@@ -163,19 +163,22 @@ const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '?'
     <p class="mb-3 rounded-lg text-sm leading-relaxed text-slate-700 dark:text-slate-300">{{ content }}</p>
 
     <!-- 图片网格 -->
-    <div v-if="images && images.length" class="grid gap-2 mb-4" :class="images.length === 1 ? 'grid-cols-1' : 'grid-cols-3'">
-      <div 
+    <div v-if="images && images.length" class="mb-4 grid w-full max-w-[19rem] grid-cols-3 gap-2">
+      <button
         v-for="(img, idx) in images" 
         :key="idx" 
-        class="relative cursor-pointer overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800"
-        :class="images.length === 1 ? 'h-48' : 'h-24 aspect-square'"
+        type="button"
+        class="relative aspect-square overflow-hidden rounded-xl bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-default dark:bg-slate-800"
+        :aria-label="'查看第 ' + (idx + 1) + ' 张附图大图'"
+        :disabled="!img"
+        @click.stop="previewImage = img || null"
       >
-         <img v-if="img" :src="img" @click.stop="previewImage = img" class="w-full h-full object-cover absolute inset-0 z-10 hover:scale-105 transition-transform duration-300" />
+         <img v-if="img" :src="img" :alt="'附图 ' + (idx + 1)" loading="lazy" class="absolute inset-0 z-10 h-full w-full object-cover transition-transform duration-300 hover:scale-105" />
          <!-- 如果没有真实图片地址，则显示占位颜色 -->
          <div class="absolute inset-0 flex items-center justify-center bg-slate-200 text-slate-300 dark:bg-slate-700 dark:text-slate-500">
             🖼️
           </div>
-      </div>
+      </button>
     </div>
 
     <!-- 专家回复 -->

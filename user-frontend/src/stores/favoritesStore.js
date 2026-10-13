@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
-import axios from 'axios'
+import { favoriteApi } from '../api/index.js'
 import { getStoredUser } from '../utils/accountSecurity'
 
 const buildFavoriteKey = (itemType, itemId) => `${itemType}_${itemId}`
@@ -79,7 +79,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
 
     try {
-      const response = await axios.get(`/api/favorite/list?userId=${userId}`)
+      const response = await favoriteApi.list(userId)
       if (response.data?.code === 200) {
         syncFavoritesState(response.data.data || [])
       }
@@ -113,7 +113,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
 
     try {
-      const response = await axios.post('/api/favorite/toggle', {
+      const response = await favoriteApi.toggle({
         userId: user.userId,
         ...normalized
       })
@@ -168,7 +168,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     )
 
     try {
-      const response = await axios.post('/api/favorite/toggle', {
+      const response = await favoriteApi.toggle({
         userId: user.userId,
         itemType,
         itemId,

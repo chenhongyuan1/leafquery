@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
+import { diagnosisApi } from '../../api/index.js'
 import { normalizeDiagnosisResponse } from '../../utils/diagnosisSelection'
 
 const isScanning = ref(false)
@@ -27,7 +27,7 @@ const onFileSelected = async event => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await axios.post('/api/pest/detect', formData, {
+    const response = await diagnosisApi.detect(formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000
     })

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import { recordApi } from '../../api/index.js'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
@@ -30,7 +30,7 @@ onMounted(async () => {
     const user = JSON.parse(userStr)
     if (!user?.userId) return
 
-    const res = await axios.get(`/api/record/list?userId=${user.userId}`)
+    const res = await recordApi.list(user.userId)
     if (res.data?.code === 200) {
       const data = res.data.data || []
       historyItems.value = data
