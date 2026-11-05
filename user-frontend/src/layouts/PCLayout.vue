@@ -28,6 +28,7 @@ import SettingsView from '../views/pc/SettingsView.vue'
 
 // 导入通用组件
 import ThemeToggle from '../components/common/ThemeToggle.vue'
+import LeafQueryBrand from '../components/pc/LeafQueryBrand.vue'
 import PCNotifications from '../components/pc/PCNotifications.vue'
 
 const favStore = useFavoritesStore()
@@ -229,10 +230,11 @@ const currentComponent = computed(() => {
        :class="isDark ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'">
     <template v-if="isIntroScreen">
       <div class="relative h-full w-full overflow-auto">
-        <div class="absolute right-6 top-6 z-20 md:right-8 md:top-8">
-          <ThemeToggle :isDark="isDark" :disabled="isThemeTransitioning" @toggle="toggleTheme" />
-        </div>
-        <PCIntro :isDark="isDark" @enter-workspace="enterWorkspace" />
+        <PCIntro :isDark="isDark" @enter-workspace="enterWorkspace">
+          <template #theme-toggle>
+            <ThemeToggle :isDark="isDark" :disabled="isThemeTransitioning" @toggle="toggleTheme" />
+          </template>
+        </PCIntro>
       </div>
     </template>
 
@@ -243,13 +245,10 @@ const currentComponent = computed(() => {
            :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'">
       
       <!-- 品牌标识 -->
-      <div class="h-16 flex items-center px-6 border-b" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
-        <div class="flex items-center space-x-2.5 group cursor-pointer" @click="goToIntro">
-          <span class="text-2xl group-hover:rotate-12 transition-transform duration-300">🌱</span>
-          <span class="text-xl font-black tracking-tight">
-            <span class="text-green-500">Leaf</span><span :class="isDark ? 'text-white' : 'text-slate-800'">Query</span>
-          </span>
-        </div>
+      <div class="h-24 flex items-center px-5 shrink-0 border-b" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
+        <button type="button" class="cursor-pointer rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-4 dark:focus-visible:ring-offset-slate-900" aria-label="返回 LeafQuery 介绍页" @click="goToIntro">
+          <LeafQueryBrand :isDark="isDark" />
+        </button>
       </div>
 
       <!-- 导航区 -->
