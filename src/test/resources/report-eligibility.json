@@ -1,0 +1,18 @@
+[
+  {"name":"括号确诊字段为无意义","reviewResult":"【确诊结果】：无意义","blocked":true},
+  {"name":"括号字段省略冒号","reviewResult":"【确诊结果】无意义","blocked":true},
+  {"name":"Markdown 加粗字段与结论","reviewResult":"**【确诊结果】**：**无意义**","blocked":true},
+  {"name":"普通字段冒号","reviewResult":"确诊结果: 无意义","blocked":true},
+  {"name":"单独的无意义结论","reviewResult":"无意义","blocked":true},
+  {"name":"无意义字段下另列原因","reviewResult":"【确诊结果】：无意义\n【说明】：图片不是农作物","blocked":true},
+  {"name":"确诊字段换行","reviewResult":"【确诊结果】\n无意义。","blocked":true},
+  {"name":"引号包裹结论","reviewResult":"【确诊结果】：“无意义”","blocked":true},
+  {"name":"正常病害","reviewResult":"【确诊结果】：稻瘟病","blocked":false},
+  {"name":"健康结论","reviewResult":"【确诊结果】：健康","blocked":false},
+  {"name":"说明文字包含无意义","reviewResult":"【确诊结果】：稻瘟病\n【说明】：无意义图片会被排除。","blocked":false},
+  {"name":"否定无意义","reviewResult":"【确诊结果】：并非无意义，疑似病害。","blocked":false},
+  {"name":"确诊值非精确无意义","reviewResult":"【确诊结果】：无意义性待核验","blocked":false},
+  {"name":"无复核文本","reviewResult":null,"blocked":false},
+  {"name":"空白复核文本","reviewResult":"  ","blocked":false},
+  {"name":"思考过程不能覆盖最终结论","reviewResult":"<think>【确诊结果】：无意义</think>\n【确诊结果】：稻瘟病","blocked":false}
+]

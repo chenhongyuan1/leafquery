@@ -184,6 +184,10 @@ public class DifyService {
             String answer = "report".equalsIgnoreCase(phase)
                     ? executeWorkflowStreaming(runEndpoint, body)
                     : executeWorkflowBlocking(runEndpoint, headers, body);
+            answer = sanitizeWorkflowAnswer(answer);
+            if (answer.isBlank()) {
+                throw new WorkflowResponseException("Dify 工作流未返回有效结论，请检查对应分支结束节点的输出。");
+            }
             log.info("Dify Workflow [phase={}] finished successfully.", phase);
             return answer;
         } catch (Exception e) {
@@ -198,7 +202,9 @@ public class DifyService {
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
         ResponseEntity<String> response = restTemplate.postForEntity(runEndpoint, request, String.class);
         JsonNode root = objectMapper.readTree(response.getBody());
-        return sanitizeWorkflowAnswer(extractWorkflowOutput(root.path("data").path("outputs")));
+        JsonNode data = root.path("data");
+        checkWorkflowFailure(data.path("status").asText(""), data.path("error").asText(""));
+        return sanitizeWorkflowAnswer(extractWorkflowOutput(data.path("outputs")));
     }
 
     private String executeWorkflowStreaming(String runEndpoint,
@@ -279,9 +285,7 @@ public class DifyService {
             JsonNode data = root.path("data");
             String status = data.path("status").asText("");
             String error = data.path("error").asText("");
-            if ("failed".equalsIgnoreCase(status) || (error != null && !error.isBlank() && !"null".equalsIgnoreCase(error))) {
-                throw new RuntimeException(error == null || error.isBlank() ? "Dify 工作流执行失败" : error);
-            }
+            checkWorkflowFailure(status, error);
             state.answer = extractWorkflowOutput(data.path("outputs"));
             state.finished = true;
             return;
@@ -300,7 +304,7 @@ public class DifyService {
             if (error.isBlank()) {
                 error = root.path("data").path("error").asText("");
             }
-            throw new RuntimeException(error.isBlank() ? "Dify 工作流执行失败" : error);
+            checkWorkflowFailure("failed", error);
         }
     }
 
@@ -322,13 +326,10 @@ public class DifyService {
                 JsonNode root = objectMapper.readTree(response.getBody());
                 String status = root.path("data").path("status").asText(root.path("status").asText(""));
                 JsonNode data = root.path("data").isMissingNode() ? root : root.path("data");
+                checkWorkflowFailure(status, data.path("error").asText(""));
                 String answer = extractWorkflowOutput(data.path("outputs"));
                 if ("succeeded".equalsIgnoreCase(status) && answer != null && !answer.isBlank()) {
                     return answer;
-                }
-                if ("failed".equalsIgnoreCase(status)) {
-                    String error = data.path("error").asText("");
-                    throw new RuntimeException(error.isBlank() ? "Dify 工作流执行失败" : error);
                 }
                 Thread.sleep(1500);
             } catch (InterruptedException e) {
@@ -377,7 +378,17 @@ public class DifyService {
         return answer.replaceAll("(?s)<think>.*?</think>\\s*", "").trim();
     }
 
+    private void checkWorkflowFailure(String status, String detail) {
+        boolean hasError = detail != null && !detail.isBlank() && !"null".equalsIgnoreCase(detail);
+        if (!"failed".equalsIgnoreCase(status) && !"stopped".equalsIgnoreCase(status) && !hasError) return;
+        if (detail != null && detail.contains("InvalidEndpoint.ClosedEndpoint")) {
+            throw new WorkflowResponseException("Dify 模型端点已关闭或暂不可用，请在 Dify 中恢复端点或更换可用模型。");
+        }
+        throw new WorkflowResponseException("Dify 工作流执行失败，请在 Dify 运行日志中检查失败节点。");
+    }
+
     private String normalizeWorkflowErrorMessage(Exception error) {
+        if (error instanceof WorkflowResponseException) return error.getMessage();
         String message = error.getMessage() == null ? "" : error.getMessage();
         Throwable cause = error.getCause();
         while ((message == null || message.isBlank()) && cause != null) {
@@ -433,5 +444,9 @@ public class DifyService {
         private String workflowRunId;
         private String answer;
         private boolean finished;
+    }
+
+    private static class WorkflowResponseException extends RuntimeException {
+        private WorkflowResponseException(String message) { super(message); }
     }
 }

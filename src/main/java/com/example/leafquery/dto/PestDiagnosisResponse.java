@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * 先选后扫架构的一步到位响应。
- * 前端收到后直接展示 YOLO 结果 + 诊断报告。
+ * identify 返回初判与按需复核；完整诊断报告由用户另行触发。
  */
 public class PestDiagnosisResponse {
 
@@ -26,7 +26,7 @@ public class PestDiagnosisResponse {
     @JsonProperty("yolo_used")
     private boolean yoloUsed;
 
-    /** 是否经过了 Vision LLM 复核 */
+    /** 是否需要 Vision LLM 复核，不代表复核已经成功 */
     @JsonProperty("review_required")
     private boolean reviewRequired;
 

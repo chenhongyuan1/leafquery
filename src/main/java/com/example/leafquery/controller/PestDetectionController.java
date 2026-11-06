@@ -7,6 +7,7 @@ import com.example.leafquery.service.DifyService;
 import com.example.leafquery.service.LocalImageStorageService;
 import com.example.leafquery.service.PlantHealthInferenceClient;
 import com.example.leafquery.service.PlantHealthInferenceException;
+import com.example.leafquery.service.ReviewConclusionPolicy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +23,8 @@ import java.util.Map;
  * 先选后扫架构 — 病虫害识别 REST 接口。
  *
  * 核心路径：POST /api/pest/identify
- * 用户预选类别 + 上传图片 → 一步到位返回 YOLO 结果 + Dify 诊断报告。
+ * 用户预选类别 + 上传图片 → 返回 YOLO 初判和按条件执行的 Dify 视觉复核。
+ * 完整报告由 /diagnose 按需生成，独立问答由 /api/ai/chat 处理。
  */
 @RestController
 @RequestMapping("/api/pest")
@@ -93,10 +95,13 @@ public class PestDetectionController {
                 try {
                     reviewResult = difyService.runReview(
                             prediction, locationId, imageReference, categoryList, yoloUsed);
+                    if (reviewResult == null || reviewResult.isBlank()) {
+                        throw new IllegalStateException("Dify 未返回有效复核结论，请检查复核分支的输出。");
+                    }
                     log.info("Phase 2 review completed successfully");
                 } catch (Exception reviewEx) {
                     log.error("Phase 2 review failed, returning YOLO results only", reviewEx);
-                    reportError = "AI 复核失败：" + (reviewEx.getMessage() != null ? reviewEx.getMessage() : "未知错误");
+                    reportError = "Dify 复核失败：" + (reviewEx.getMessage() != null ? reviewEx.getMessage() : "未知错误");
                 }
             }
 
@@ -139,6 +144,11 @@ public class PestDetectionController {
             @RequestParam(value = "predictionJson", required = false) String predictionJson,
             @RequestParam(value = "locationId", defaultValue = "101010100") String locationId,
             @RequestParam(value = "reviewResult", required = false) String reviewResult) {
+
+        if (ReviewConclusionPolicy.isMeaningless(reviewResult)) {
+            return ResponseEntity.unprocessableEntity()
+                    .body(Map.of("error", ReviewConclusionPolicy.REPORT_BLOCK_REASON));
+        }
 
         List<String> categoryList = detectionSelectionService.sanitizeCategories(
                 Arrays.asList(categories.split(","))

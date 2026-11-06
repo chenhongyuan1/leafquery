@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { diagnosisApi, recordApi } from '../../api/index.js'
 import { useSettingsStore } from '../../stores/settings'
+import { isMeaninglessReview, MEANINGLESS_REVIEW_REPORT_MESSAGE } from '../../utils/reviewConclusion.js'
 import { AUTH_CHANGE_EVENT, getStoredUser } from '../../utils/accountSecurity'
 import {
   dismissPopupAnnouncement,
@@ -533,9 +534,11 @@ const createEmptyDetectionResult = () => ({
   sceneType: 'single',
   classNamesZh: [],
   detectedSummary: [],
-  report: ''
+  report: '',
+  reviewError: ''
 })
 const detectionResult = ref(createEmptyDetectionResult())
+const isMeaninglessDiagnosis = computed(() => isMeaninglessReview(detectionResult.value?.reviewResult))
 
 const sceneBadgeClassMap = {
   single: 'bg-emerald-100 text-emerald-700',
@@ -756,6 +759,7 @@ const onScanFileSelected = async (event) => {
       detectedSummary: predictionRaw.detected_summary || predictionRaw.detectedSummary || [],
       report: '',  // 阶段 3 按需生成
       reviewResult: reviewResult,
+      reviewError: reportError,
       imageUrl: savedImageUrl,
       predictionJson: JSON.stringify(predictionRaw),
       userCategories: selectedCategories.value.join(',')
@@ -789,7 +793,7 @@ const onScanFileSelected = async (event) => {
 
     // 复核失败提示
     if (reportError) {
-      showToast('YOLO 识别完成，但 AI 复核失败', 'warning', 5000)
+      showToast('Dify 视觉复核未完成，可在结果中查看原因。', 'warning', 5000)
     }
 
     // 关闭分析动画，展示结果摘要
@@ -823,7 +827,7 @@ const reportLoadingText = ref(reportLoadingSteps[0])
 let reportLoadingInterval = null
 
 const generateReport = async () => {
-  if (isGeneratingReport.value) return
+  if (isGeneratingReport.value || isMeaninglessDiagnosis.value) return
   isGeneratingReport.value = true
 
   let stepIndex = 0
@@ -1315,7 +1319,7 @@ const formatTime = (item) => {
                     <span class="rounded-full px-3 py-1 text-xs font-bold" :class="sceneBadgeClasses">{{ sceneMeta.label }}</span>
                     <span v-if="yoloUsed" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">YOLO</span>
                     <span v-if="reviewRequired && detectionResult?.reviewResult" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">已复核</span>
-                    <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">待复核</span>
+                    <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-600">复核未完成</span>
                     <span v-else-if="!reviewRequired && yoloUsed" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">无需复核</span>
                   </div>
                 </div>
@@ -1364,14 +1368,19 @@ const formatTime = (item) => {
                 <!-- 待复核提示（二次复核失败时） -->
                 <div v-else-if="reviewRequired" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 flex items-center gap-2">
                   <span class="text-base">⚠</span>
-                  <span class="text-xs font-bold text-amber-700">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
+                  <div class="text-xs text-amber-700">
+                    <p class="font-bold">Dify 视觉复核未完成</p>
+                    <p class="mt-1 leading-relaxed">{{ detectionResult.reviewError || '复核服务未返回有效结论，请稍后重试。' }}</p>
+                    <p class="mt-1">{{ yoloUsed ? 'YOLO 初判结果仍可查看。' : '尚未获得有效识别结论，请补充图片或稍后重试。' }}</p>
+                  </div>
                 </div>
               </div>
               
               <div class="shrink-0 space-y-3">
                 <!-- 阶段 3：生成诊断报告按钮 -->
+                <p v-if="isMeaninglessDiagnosis" class="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600" role="status">{{ MEANINGLESS_REVIEW_REPORT_MESSAGE }}</p>
                 <button 
-                  v-if="!detectionResult?.report"
+                  v-if="!detectionResult?.report && !isMeaninglessDiagnosis"
                   @click="generateReport" 
                   :disabled="isGeneratingReport"
                   class="w-full py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
@@ -1392,7 +1401,7 @@ const formatTime = (item) => {
 
                 <!-- 已有报告时：查看报告按钮 -->
                 <button 
-                  v-if="detectionResult?.report" 
+                  v-if="detectionResult?.report && !isMeaninglessDiagnosis"
                   @click="showDetail = true" 
                   class="w-full bg-slate-900 text-white py-3.5 sm:py-4 rounded-xl font-bold text-base shadow-lg shadow-slate-900/20 active:scale-[0.98] transition-all"
                 >

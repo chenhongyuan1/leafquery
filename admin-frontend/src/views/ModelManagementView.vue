@@ -68,7 +68,7 @@ async function save() {
       configValue: editingField.value ? (form.value.configValue || '').trim() : form.value.configValue,
       description: form.value.description
     })
-    showToast('配置已更新，将在下一次 AI 请求中读取')
+    showToast(editingField.value ? '配置已更新，将在下一次 AI 请求中读取' : '配置已更新')
     showModal.value = false
     await load({ afterSave: true })
   } catch (error) {
@@ -175,7 +175,7 @@ function maskValue(key, val) {
 
     <div v-if="activeCategory === 'llm'" class="card mb-16">
       <h3 class="llm-title">📌 AI 问答模型 <span class="badge blue">OpenAI 兼容 · Chat Completions</span></h3>
-      <p class="config-help">用于首页农业咨询和连续追问。通过下方“编辑”分别修改接口地址、API Key 和模型 ID，三项需对应同一服务。支持 OpenAI 及兼容服务，图文提问需要所选模型支持图片输入。</p>
+      <p class="config-help">用于首页农业咨询和连续追问。图像复核和诊断报告使用 Dify 工作流内的模型配置。通过下方“编辑”分别修改接口地址、API Key 和模型 ID，三项需对应同一服务。支持 OpenAI 及兼容服务，图文提问需要所选模型支持图片输入。</p>
       <dl class="llm-summary">
         <div><dt>后台模型 ID</dt><dd>{{ configuredModel }}</dd></div>
         <div><dt>请求端点预览</dt><dd class="endpoint-preview">{{ configuredEndpoint || (configuredUrlError ? '地址需要修改' : '使用服务器环境配置') }}</dd></div>

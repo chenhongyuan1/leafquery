@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { diagnosisApi } from '../../api/index.js'
 import { useFarmStore } from '../../stores/farmStore'
+import { isMeaninglessReview, MEANINGLESS_REVIEW_REPORT_MESSAGE } from '../../utils/reviewConclusion.js'
 import {
   formatConfidencePercent,
   getPrimaryDisplayName,
@@ -126,6 +127,7 @@ const diagnosisContextName = computed(() => {
   return primaryDisplayName.value
 })
 const formatConfidence = (value, digits = 1) => formatConfidencePercent(value, digits)
+const isMeaninglessDiagnosis = computed(() => isMeaninglessReview(detectionResult.value?.reviewResult))
 
 onMounted(async () => {
   await farmStore.initialize()
@@ -253,6 +255,7 @@ const processFile = async (file) => {
       detectedSummary: predictionRaw.detected_summary || predictionRaw.detectedSummary || [],
       report: '',  // 阶段 3 按需生成
       reviewResult: reviewResult,
+      reviewError: reportError,
       imageUrl: savedImageUrl,
       predictionJson: JSON.stringify(predictionRaw),
       userCategories: selectedCategories.value.join(',')
@@ -268,7 +271,7 @@ const processFile = async (file) => {
     // 复核失败提示
     messages.value = []
     if (reportError) {
-      errorMsg.value = 'YOLO 识别完成，但 AI 复核失败'
+      errorMsg.value = yoloUsed.value ? 'YOLO 初判完成，Dify 视觉复核未完成，请查看复核提示。' : 'Dify 视觉复核未完成，请查看复核提示。'
     }
 
     isResultReady.value = true
@@ -299,7 +302,7 @@ const reportLoadingSteps = [
 const reportLoadingText = ref(reportLoadingSteps[0])
 let reportLoadingInterval = null
 const generateReport = async () => {
-  if (isGeneratingReport.value) return
+  if (isGeneratingReport.value || isMeaninglessDiagnosis.value) return
   isGeneratingReport.value = true
   errorMsg.value = ''
 
@@ -596,7 +599,7 @@ const renderMarkdown = (text) => {
                         已复核
                       </span>
                       <span v-else-if="reviewRequired && !detectionResult?.reviewResult" class="rounded-full bg-amber-100 px-3 py-1 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
-                        待复核
+                        复核未完成
                       </span>
                       <span v-else-if="!reviewRequired && yoloUsed" class="rounded-full bg-slate-100 px-3 py-1 text-slate-500 dark:bg-slate-700 dark:text-slate-400">
                         无需复核
@@ -639,12 +642,17 @@ const renderMarkdown = (text) => {
               <!-- 暂无复核结果 -->
               <div v-else-if="reviewRequired" class="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 dark:border-amber-500/20 dark:bg-amber-500/5 px-4 py-3 flex items-center gap-2">
                 <span class="text-base">⚠</span>
-                <span class="text-xs font-bold text-amber-700 dark:text-amber-300">AI 复核暂时不可用，请根据 YOLO 检测结果自行判断</span>
+                <div class="text-xs text-amber-700 dark:text-amber-300">
+                  <p class="font-bold">Dify 视觉复核未完成</p>
+                  <p class="mt-1 leading-relaxed">{{ detectionResult.reviewError || '复核服务未返回有效结论，请稍后重试。' }}</p>
+                  <p class="mt-1">{{ yoloUsed ? 'YOLO 初判结果仍可查看。' : '尚未获得有效识别结论，请补充图片或稍后重试。' }}</p>
+                </div>
               </div>
 
               <!-- 生成报告 -->
+              <p v-if="isMeaninglessDiagnosis" class="mt-4 rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300" role="status">{{ MEANINGLESS_REVIEW_REPORT_MESSAGE }}</p>
               <button 
-                v-if="!detectionResult?.report"
+                v-if="!detectionResult?.report && !isMeaninglessDiagnosis"
                 @click="generateReport" 
                 :disabled="isGeneratingReport"
                 class="mt-4 w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"

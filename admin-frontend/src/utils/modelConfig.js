@@ -5,7 +5,7 @@ const LLM_FIELDS = {
   },
   'doubao.api.key': {
     label: 'API Key', type: 'password', placeholder: '填写对应服务的 API Key',
-    hint: '必须与接口地址属于同一服务。留空时使用服务器环境配置。'
+    hint: '必须与接口地址属于同一服务。'
   },
   'doubao.api.model': {
     label: '模型 ID', type: 'text', placeholder: '填写服务提供方支持的模型 ID',
