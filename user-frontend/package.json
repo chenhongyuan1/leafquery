@@ -8,6 +8,7 @@
     "build": "vite build",
     "test": "node --test test/api.test.js test/introInteraction.test.js test/plantSceneMotion.test.js test/reviewConclusion.test.js",
     "test:layout": "node --test test/dataCenterLayout.browser.test.js",
+    "test:sidebar": "node --test test/pcSidebar.browser.test.js",
     "test:diagnosis": "node --test test/diagnosisFlow.browser.test.js",
     "preview": "vite preview"
   },

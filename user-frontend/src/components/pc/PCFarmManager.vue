@@ -428,7 +428,7 @@ const setCurrentCrop = async (cropId) => {
           <button
             class="w-full whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition"
             :class="String(farmStore.activeCropId) === String(crop.id)
-              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+              ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/10'
               : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300'"
             @click="setCurrentCrop(crop.id)"
           >
@@ -634,13 +634,13 @@ const setCurrentCrop = async (cropId) => {
 .pc-farm-shell {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 }
 
 .pc-farm-card {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
 }
 
 .pc-farm-soft {
@@ -656,13 +656,13 @@ const setCurrentCrop = async (cropId) => {
 :global(.dark .pc-farm-shell) {
   background: rgba(15, 23, 42, 0.92);
   border-color: rgba(51, 65, 85, 0.88);
-  box-shadow: 0 22px 52px rgba(2, 6, 23, 0.3);
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.12);
 }
 
 :global(.dark .pc-farm-card) {
   background: rgba(2, 6, 23, 0.55);
   border-color: rgba(51, 65, 85, 0.88);
-  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.28);
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.1);
 }
 
 :global(.dark .pc-farm-soft) {

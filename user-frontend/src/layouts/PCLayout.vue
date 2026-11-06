@@ -200,6 +200,16 @@ const handleLogout = async () => {
 
 // ============ 电脑端导航页签 ============
 const activeTab = ref('intro')
+const isSidebarCollapsed = ref(false)
+const sidebarBrandButton = ref(null)
+const sidebarCollapseButton = ref(null)
+
+const toggleSidebar = async () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+  await nextTick()
+  const target = isSidebarCollapsed.value ? sidebarBrandButton.value : sidebarCollapseButton.value
+  target?.focus({ preventScroll: true })
+}
 
 const enterWorkspace = () => {
   activeTab.value = 'workspace'
@@ -207,6 +217,11 @@ const enterWorkspace = () => {
 
 const goToIntro = () => {
   activeTab.value = 'intro'
+}
+
+const handleSidebarBrandClick = () => {
+  if (isSidebarCollapsed.value) toggleSidebar()
+  else goToIntro()
 }
 
 const navItems = [
@@ -226,8 +241,8 @@ const currentComponent = computed(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-full overflow-hidden"
-       :class="isDark ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'">
+  <div class="pc-layout flex h-screen w-full overflow-hidden"
+       :class="[{ 'pc-layout--sidebar-collapsed': isSidebarCollapsed }, isDark ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900']">
     <template v-if="isIntroScreen">
       <div class="relative h-full w-full overflow-auto">
         <PCIntro :isDark="isDark" @enter-workspace="enterWorkspace">
@@ -241,44 +256,79 @@ const currentComponent = computed(() => {
     <template v-else>
     
     <!-- 左侧边栏 -->
-    <aside class="w-64 flex flex-col shrink-0 border-r"
-           :class="isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'">
+    <aside id="pc-sidebar" class="pc-sidebar flex flex-col shrink-0 border-r"
+           :class="[{ 'pc-sidebar--collapsed': isSidebarCollapsed, 'pc-sidebar--dark': isDark }, isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm']">
       
       <!-- 品牌标识 -->
-      <div class="h-24 flex items-center px-5 shrink-0 border-b" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
-        <button type="button" class="cursor-pointer rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-4 dark:focus-visible:ring-offset-slate-900" aria-label="返回 LeafQuery 介绍页" @click="goToIntro">
-          <LeafQueryBrand :isDark="isDark" />
+      <div class="pc-sidebar-brand h-24 flex items-center shrink-0 border-b" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
+        <button ref="sidebarBrandButton" type="button"
+                class="pc-sidebar-brand-button relative cursor-pointer rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-4 dark:focus-visible:ring-offset-slate-900"
+                :class="{ 'pc-sidebar-toggle': isSidebarCollapsed }"
+                :aria-label="isSidebarCollapsed ? '展开侧边栏' : '返回 LeafQuery 介绍页'"
+                :title="isSidebarCollapsed ? undefined : '返回介绍页'"
+                :aria-expanded="isSidebarCollapsed ? false : undefined"
+                :aria-controls="isSidebarCollapsed ? 'pc-sidebar' : undefined"
+                :aria-describedby="isSidebarCollapsed ? 'pc-sidebar-expand-hint' : undefined"
+                @click="handleSidebarBrandClick">
+          <LeafQueryBrand :isDark="isDark" :compact="isSidebarCollapsed" />
+          <span v-if="isSidebarCollapsed" class="pc-sidebar-open-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" class="w-6 h-6">
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16m4-12 4 4-4 4" />
+            </svg>
+          </span>
+          <span v-if="isSidebarCollapsed" id="pc-sidebar-expand-hint" class="pc-sidebar-tooltip" role="tooltip">打开边栏</span>
         </button>
       </div>
 
       <!-- 导航区 -->
-      <nav class="flex-1 px-4 py-6 space-y-2">
+      <nav class="pc-sidebar-nav flex-1 min-h-0 overflow-y-auto" aria-label="主导航">
+        <div class="pc-sidebar-tools" :aria-hidden="isSidebarCollapsed" :inert="isSidebarCollapsed">
+          <button v-if="!isSidebarCollapsed" ref="sidebarCollapseButton" type="button"
+                  class="pc-sidebar-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'"
+                  aria-label="收起侧边栏" title="收起侧边栏" aria-expanded="true" aria-controls="pc-sidebar"
+                  @click="toggleSidebar">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" class="w-5 h-5">
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16m8-12-4 4 4 4" />
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-2">
         <button v-for="item in navItems" :key="item.id"
+                type="button"
                 @click="activeTab = item.id"
-                class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-bold transition-all text-left"
+                :aria-label="item.label"
+                :aria-current="activeTab === item.id ? 'page' : undefined"
+                :title="isSidebarCollapsed ? item.label : undefined"
+                class="pc-sidebar-item w-full flex items-center px-4 py-3 rounded-xl font-bold transition-colors text-left"
                 :class="activeTab === item.id
                   ? (isDark ? 'bg-green-500/10 text-green-400' : 'bg-green-50 text-green-600')
                   : (isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-900')">
-           <span class="text-xl">{{ item.icon }}</span>
-           <span>{{ item.label }}</span>
+           <span class="pc-sidebar-nav-icon text-xl" aria-hidden="true">{{ item.icon }}</span>
+           <span class="pc-sidebar-text" :aria-hidden="isSidebarCollapsed">{{ item.label }}</span>
         </button>
+        </div>
       </nav>
 
       <!-- 底部用户区 -->
-      <div class="p-4 border-t" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
-         <button v-if="!currentUser" @click="showLoginModal = true"
-                 class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all">
-            点击登录系统
+      <div class="pc-sidebar-footer border-t" :class="isDark ? 'border-slate-800' : 'border-slate-100'">
+         <button v-if="!currentUser" type="button" @click="showLoginModal = true"
+                 aria-label="登录系统" :title="isSidebarCollapsed ? '登录系统' : undefined"
+                 class="pc-sidebar-login w-full flex items-center justify-center bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-colors">
+            <svg v-if="isSidebarCollapsed" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-5 h-5 shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.25a7.5 7.5 0 0 1 15 0" /></svg>
+            <span class="pc-sidebar-text" :aria-hidden="isSidebarCollapsed">点击登录系统</span>
          </button>
-         <div v-else class="flex items-center justify-between p-2 rounded-xl" :class="isDark ? 'bg-slate-800' : 'bg-slate-50'">
-            <div class="flex items-center space-x-3 truncate">
+         <div v-else class="pc-sidebar-user flex items-center justify-between p-2 rounded-xl" :class="isDark ? 'bg-slate-800' : 'bg-slate-50'">
+            <div class="pc-sidebar-user-details flex items-center min-w-0" :title="currentUser.username">
                <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold overflow-hidden shrink-0">
-                  <img v-if="currentUser.avatarUrl" :src="currentUser.avatarUrl" class="w-full h-full object-cover" />
+                  <img v-if="currentUser.avatarUrl" :src="currentUser.avatarUrl" :alt="currentUser.username" class="w-full h-full object-cover" />
                   <span v-else>{{ currentUser.username?.[0]?.toUpperCase() }}</span>
                </div>
-               <span class="font-bold text-sm truncate" :class="isDark ? 'text-slate-200' : 'text-slate-700'">{{ currentUser.username }}</span>
+               <span class="pc-sidebar-text font-bold text-sm truncate" :aria-hidden="isSidebarCollapsed" :class="isDark ? 'text-slate-200' : 'text-slate-700'">{{ currentUser.username }}</span>
             </div>
-            <button @click="handleLogout" class="p-2 text-slate-400 hover:text-red-500 transition-colors" title="退出">
+            <button type="button" @click="handleLogout" class="p-2 shrink-0 text-slate-400 hover:text-red-500 transition-colors" title="退出登录" aria-label="退出登录">
                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
             </button>
          </div>
@@ -286,7 +336,7 @@ const currentComponent = computed(() => {
     </aside>
 
     <!-- 右侧主内容区 -->
-    <main class="flex-1 flex flex-col overflow-hidden relative">
+    <main class="pc-main min-w-0 flex flex-col overflow-hidden relative">
       <!-- 顶部栏 -->
       <header class="h-16 flex items-center justify-end border-b px-8 shrink-0"
               :class="isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'">
@@ -298,7 +348,7 @@ const currentComponent = computed(() => {
       </header>
       
       <!-- 页面内容区 -->
-      <div class="flex-1 overflow-y-auto w-full relative">
+      <div class="pc-page-host flex-1 min-h-0 overflow-hidden w-full relative">
         <Transition
           enter-active-class="transition ease-out duration-300"
           enter-from-class="opacity-0 translate-y-4"
@@ -308,7 +358,7 @@ const currentComponent = computed(() => {
           leave-to-class="opacity-0"
           mode="out-in"
         >
-           <component :is="currentComponent" />
+           <component :is="currentComponent" :class="{ 'pc-content-frame': activeTab === 'workspace' }" />
         </Transition>
       </div>
     </main>
@@ -416,6 +466,45 @@ const currentComponent = computed(() => {
 </template>
 
 <style scoped>
+.pc-layout { --pc-sidebar-expanded-width: 256px; --pc-sidebar-collapsed-width: 80px; --pc-content-inset: 0px; }
+.pc-layout--sidebar-collapsed { --pc-content-inset: calc((var(--pc-sidebar-expanded-width) - var(--pc-sidebar-collapsed-width)) / 2); }
+.pc-sidebar { --sidebar-logo-hover: #edf1f3; --sidebar-hint-bg: #1f2937; --sidebar-hint-text: #f8fafc; width: var(--pc-sidebar-expanded-width); overflow: hidden; transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pc-sidebar--dark { --sidebar-logo-hover: #27272a; --sidebar-hint-bg: #e5e7eb; --sidebar-hint-text: #111827; }
+.pc-sidebar--collapsed { width: var(--pc-sidebar-collapsed-width); }
+/* 上栏及滚动视口铺满，只有内层内容保持原宽度并居中。 */
+.pc-main { flex: 1 1 0; }
+:deep(.pc-content-frame) { margin-inline: var(--pc-content-inset); transition: margin 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+:deep(.pc-page-scroll) { scrollbar-gutter: stable; }
+.pc-sidebar-brand { padding-inline: 20px; transition: padding 260ms ease; }
+.pc-sidebar-nav { padding: 24px 16px; transition: padding 260ms ease; }
+.pc-sidebar-tools { display: flex; align-items: center; justify-content: flex-end; height: 32px; margin-bottom: 8px; opacity: 1; overflow: hidden; transition: height 200ms ease, margin-bottom 200ms ease, opacity 160ms ease; }
+.pc-sidebar-brand-button .leafquery-brand, .pc-sidebar-open-icon { transition: opacity 140ms ease; }
+.pc-sidebar-open-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-text, currentColor); opacity: 0; }
+.pc-sidebar-tooltip { position: fixed; top: 30px; left: calc(var(--pc-sidebar-collapsed-width) + 8px); z-index: 60; padding: 9px 14px; border-radius: 12px; background: var(--sidebar-hint-bg); color: var(--sidebar-hint-text); font-size: 14px; font-weight: 500; line-height: 20px; white-space: nowrap; pointer-events: none; visibility: hidden; opacity: 0; transform: translateX(-4px); transition: opacity 140ms ease, transform 140ms ease; }
+.pc-sidebar-item, .pc-sidebar-user-details { gap: 12px; transition: gap 200ms ease; }
+.pc-sidebar-nav-icon { width: 24px; flex-shrink: 0; text-align: center; }
+.pc-sidebar-text { display: inline-block; max-width: 180px; overflow: hidden; white-space: nowrap; opacity: 1; transition: max-width 200ms ease, opacity 160ms ease; }
+.pc-sidebar-footer { padding: 16px; transition: padding 260ms ease; }
+.pc-sidebar-login { min-height: 48px; }
+.pc-sidebar-user { gap: 8px; }
+.pc-sidebar--collapsed .pc-sidebar-brand { padding-inline: 17px; }
+.pc-sidebar--collapsed .pc-sidebar-brand-button { width: 46px; height: 46px; border-radius: 50%; }
+.pc-sidebar--collapsed .pc-sidebar-brand-button:hover, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible { background: var(--sidebar-logo-hover); }
+.pc-sidebar--collapsed .pc-sidebar-brand-button:hover .leafquery-brand, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .leafquery-brand { opacity: 0; }
+.pc-sidebar--collapsed .pc-sidebar-brand-button:hover .pc-sidebar-open-icon, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .pc-sidebar-open-icon { opacity: 1; }
+.pc-sidebar--collapsed .pc-sidebar-brand-button:hover .pc-sidebar-tooltip, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .pc-sidebar-tooltip { visibility: visible; opacity: 1; transform: none; }
+.pc-sidebar--collapsed .pc-sidebar-tools { height: 0; margin-bottom: 0; opacity: 0; }
+.pc-sidebar--collapsed .pc-sidebar-nav, .pc-sidebar--collapsed .pc-sidebar-footer { padding-inline: 12px; }
+.pc-sidebar--collapsed .pc-sidebar-item, .pc-sidebar--collapsed .pc-sidebar-user-details { gap: 0; }
+.pc-sidebar--collapsed .pc-sidebar-text { max-width: 0; opacity: 0; }
+.pc-sidebar--collapsed .pc-sidebar-user { flex-direction: column; }
+@media (prefers-reduced-motion: reduce) {
+  :deep(.pc-content-frame) { transition: none; }
+  .pc-sidebar, .pc-sidebar-brand, .pc-sidebar-nav, .pc-sidebar-item,
+  .pc-sidebar-user-details, .pc-sidebar-text, .pc-sidebar-footer, .pc-sidebar-tools,
+  .pc-sidebar-brand-button .leafquery-brand, .pc-sidebar-open-icon, .pc-sidebar-tooltip { transition: none; }
+}
+
 :global(::view-transition-old(root)),
 :global(::view-transition-new(root)) {
   animation: none;

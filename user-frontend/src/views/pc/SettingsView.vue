@@ -359,17 +359,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-slate-50/60 p-8 dark:bg-slate-950/40">
+  <div class="pc-settings-page pc-page-scroll custom-scrollbar h-full overflow-y-auto bg-slate-50/60 dark:bg-slate-950/40">
+    <div class="pc-content-frame flex min-h-full flex-col p-8">
     <div class="mb-8 shrink-0">
       <h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">系统设置</h2>
     </div>
 
-    <div class="pc-settings-shell flex min-h-0 flex-1 flex-col gap-8 overflow-hidden rounded-[2rem] border border-white/60 bg-white/90 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex-row dark:border-slate-800/80 dark:bg-slate-900/[0.92]">
-      <aside class="flex w-full shrink-0 flex-col gap-2 border-b border-slate-100 pb-8 lg:w-72 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-8 dark:border-slate-800">
+    <div class="pc-settings-shell flex flex-1 flex-col gap-8 rounded-[2rem] border border-slate-200 bg-white p-8 lg:flex-row dark:border-slate-800/80 dark:bg-slate-900/[0.92]">
+      <aside class="flex w-full shrink-0 flex-col gap-2 border-b border-slate-100 pb-8 lg:sticky lg:top-8 lg:w-72 lg:self-start lg:border-b-0 lg:border-r lg:pb-0 lg:pr-8 dark:border-slate-800">
         <button
           class="rounded-2xl px-5 py-3 text-left text-sm font-bold transition-colors"
           :class="activeSection === 'overview'
-            ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/10 dark:bg-emerald-400 dark:text-slate-950'
+            ? 'bg-slate-950 text-white shadow-sm dark:bg-emerald-400 dark:text-slate-950'
             : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70'"
           @click="activeSection = 'overview'"
         >
@@ -424,13 +425,13 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <section class="custom-scrollbar min-h-0 flex-1 overflow-y-auto lg:pr-3">
+      <section class="pc-settings-content min-w-0 flex-1">
         <div v-if="loading" class="flex h-full items-center justify-center text-sm font-bold text-slate-400">
           正在同步账户与农场数据...
         </div>
 
         <div v-else-if="activeSection === 'overview'" class="space-y-8">
-          <div class="rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-900 p-7 text-white shadow-[0_20px_60px_rgba(15,23,42,0.24)] dark:border-slate-800">
+          <div class="pc-settings-hero rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-900 p-7 text-white dark:border-slate-800">
             <div class="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
               <div class="flex items-center gap-5">
                 <div class="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[1.75rem] bg-white/10 text-3xl font-black ring-1 ring-white/10">
@@ -765,9 +766,12 @@ onBeforeUnmount(() => {
       </section>
     </div>
   </div>
+    </div>
 </template>
 
 <style scoped>
+.pc-settings-hero { box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); }
+:global(.dark .pc-settings-hero) { box-shadow: 0 2px 8px rgba(2, 6, 23, 0.14); }
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -795,13 +799,14 @@ onBeforeUnmount(() => {
 
 .pc-settings-shell {
   background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(226, 232, 240, 0.92);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
 }
 
 .pc-settings-panel {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.025);
 }
 
 .pc-settings-soft {
@@ -812,13 +817,13 @@ onBeforeUnmount(() => {
 :global(.dark .pc-settings-shell) {
   background: rgba(15, 23, 42, 0.92);
   border-color: rgba(30, 41, 59, 0.85);
-  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.34);
+  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.14);
 }
 
 :global(.dark .pc-settings-panel) {
   background: rgba(2, 6, 23, 0.55);
   border-color: rgba(51, 65, 85, 0.88);
-  box-shadow: 0 18px 48px rgba(2, 6, 23, 0.28);
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.1);
 }
 
 :global(.dark .pc-settings-soft) {

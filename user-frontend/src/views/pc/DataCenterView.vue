@@ -622,7 +622,8 @@ const targetOverviewOption = computed(() => ({
 </script>
 
 <template>
-  <div class="pc-data-page custom-scrollbar h-full overflow-y-auto bg-slate-50/50 p-8 dark:bg-slate-950/[0.35]">
+  <div class="pc-data-page pc-page-scroll custom-scrollbar h-full overflow-y-auto bg-slate-50/50 dark:bg-slate-950/[0.35]">
+    <div class="pc-content-frame p-8">
     <div class="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
       <div>
         <h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">数据中心</h2>
@@ -638,7 +639,7 @@ const targetOverviewOption = computed(() => ({
 
     <div v-else class="space-y-6">
       <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <section class="rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-900 p-7 text-white shadow-[0_28px_90px_rgba(15,23,42,0.2)] dark:border-slate-800">
+        <section class="pc-data-hero rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-900 p-7 text-white dark:border-slate-800">
           <div class="flex flex-wrap items-center gap-2">
             <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.18em] text-white/80">作物视角</span>
             <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80">{{ cropScopeLabel }}</span>
@@ -854,9 +855,12 @@ const targetOverviewOption = computed(() => ({
       </div>
     </div>
   </div>
+    </div>
 </template>
 
 <style scoped>
+.pc-data-hero { box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); }
+:global(.dark .pc-data-hero) { box-shadow: 0 2px 8px rgba(2, 6, 23, 0.14); }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
@@ -869,7 +873,7 @@ const targetOverviewOption = computed(() => ({
   min-width: 0;
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 }
 
 .pc-data-soft {
@@ -885,7 +889,7 @@ const targetOverviewOption = computed(() => ({
 :global(.dark .pc-data-panel) {
   background: rgba(15, 23, 42, 0.88);
   border-color: rgba(51, 65, 85, 0.88);
-  box-shadow: 0 22px 52px rgba(2, 6, 23, 0.34);
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.12);
 }
 
 :global(.dark .pc-data-soft) {
