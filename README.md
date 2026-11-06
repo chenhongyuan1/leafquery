@@ -239,20 +239,22 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 
 #### Dify 云端调用本机天气接口
 
-Dify 云端的 `localhost` 指向云端自身。继续使用本机后端联调时，可以通过第三方 Pinggy 建立临时 HTTPS 入口，城市编号和天气 JSON 会经过该服务。当前按用户要求无需自定义请求头，只接受指定天气路径的 GET 查询；其他业务路径返回 404。
+Dify 云端的 `localhost` 指向云端自身。本机联调现使用 ngrok 账号分配的固定开发域名，城市编号和天气 JSON 会经过 ngrok。无需自定义请求头，只接受指定天气路径的 GET 查询，其他业务路径返回 404。首次使用需要本人完成 ngrok 账号认证；当前实现与验证状态见联调记录。
 
-先启动本机服务，在确认使用 Pinggy 后执行：
+先执行 `start-all.cmd start`。首次使用双击根目录 [setup-ngrok.cmd](setup-ngrok.cmd)，在打开的官方页面注册或登录、复制 Authtoken，再粘贴到本机窗口隐藏输入并按回车。令牌保存在被 Git 忽略的 `.leafquery-runtime/weather-tunnel/ngrok.yml`，不需要发到聊天，也不填写到 Dify。设置完成后自动尝试启动天气入口。
+
+后续使用：
 
 ```powershell
-.\start-weather-tunnel.cmd start   # 只公开天气查询接口，无需自定义请求头
-.\start-weather-tunnel.cmd status  # 查看临时地址与配置文件位置
-.\start-weather-tunnel.cmd restart-gateway # 更新网关实现，保留现有隧道地址
-.\start-weather-tunnel.cmd stop    # 关闭入口，保留 Java 后端运行
+.\ngrok-weather.cmd start   # 复用账号固定域名，只公开天气查询
+.\ngrok-weather.cmd status  # 查看实际固定地址与配置文件位置
+.\ngrok-weather.cmd restart-gateway # 只更新网关，保留 ngrok 连接
+.\ngrok-weather.cmd stop    # 关闭入口，保留 Java 后端运行
 ```
 
-需要 Node.js 和 Windows OpenSSH 客户端。Dify HTTP 节点使用 GET，URL 从 `.leafquery-runtime/weather-tunnel/dify-connection.txt` 复制；查询参数名为 `locationId`，值选择工作流的 `location_id` 变量。鉴权选择“无”、HEADERS 留空、BODY 选择 `none`。和风天气 JWT 仍由 Java 后端生成。
+需要 Node.js 和 ngrok 客户端，首次设置会从官方地址下载客户端并校验数字签名。Dify HTTP 节点使用 GET，URL 从设置成功后生成的 `.leafquery-runtime/weather-tunnel/dify-connection.txt` 复制；查询参数名为 `locationId`，值选择工作流的 `location_id` 变量。鉴权选择“无”、HEADERS 留空、BODY 选择 `none`。和风天气 JWT 仍由 Java 后端生成。
 
-Pinggy 免费入口每次最长 60 分钟，重新启动后地址会变化；保持电脑、后端和隧道运行。网关只转发 `/api/weather/features`，不会转发其他业务路径。详细范围、测试与当前限制见 [联调记录](docs/biz-modules/04-dify-weather-tunnel/README.md) 和 [Pinggy 官方说明](https://pinggy.io/)。
+ngrok 免费开发域名绑定账号，同一账号重启后继续复用，端点无会话超时但有用量额度。保持电脑、后端和 ngrok 运行；固定地址不等于电脑关机后仍可用。详细范围、迁移状态及验证限制见 [联调记录](docs/biz-modules/04-dify-weather-tunnel/README.md) 和 [ngrok 官方说明](https://ngrok.com/docs/pricing-limits/free-plan-limits/#domains)。
 
 ### 5. 手动启动（IDE 或没有启动器时）
 
