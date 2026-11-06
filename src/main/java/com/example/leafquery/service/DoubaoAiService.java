@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,9 @@ public class DoubaoAiService {
     @Value("${asr.resource.id:volc.seedasr.sauc.duration}")
     private String defaultAsrResourceId;
 
+    @Value("${tts.api.key:}")
+    private String defaultTtsApiKey;
+
     @Value("${tts.app.id:}")
     private String defaultTtsAppId;
 
@@ -84,10 +88,48 @@ public class DoubaoAiService {
     private String getAsrAppId() { return getConfig("asr.app.id", defaultAsrAppId); }
     private String getAsrAccessToken() { return getConfig("asr.access.token", defaultAsrAccessToken); }
     private String getAsrResourceId() { return getConfig("asr.resource.id", defaultAsrResourceId); }
+    private String getTtsApiKey() { return getConfig("tts.api.key", defaultTtsApiKey); }
     private String getTtsAppId() { return getConfig("tts.app.id", defaultTtsAppId); }
     private String getTtsAccessToken() { return getConfig("tts.access.token", defaultTtsAccessToken); }
     private String getTtsResourceId() { return getConfig("tts.resource.id", defaultTtsResourceId); }
     private String getTtsSpeaker() { return getConfig("tts.speaker", defaultTtsSpeaker); }
+
+    /** Accept a compatible base URL, a complete endpoint, or the legacy Responses URL. */
+    private String getChatCompletionsUrl() {
+        String configured = getApiUrl();
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalArgumentException("请配置 AI 问答接口地址");
+        }
+        java.net.URI uri = java.net.URI.create(configured.trim());
+        if (uri.getHost() == null || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))) {
+            throw new IllegalArgumentException("AI 问答接口地址必须为 HTTP 或 HTTPS 地址");
+        }
+        String path = uri.getRawPath() == null ? "" : uri.getRawPath().replaceAll("/+$", "");
+        if (path.isEmpty()) {
+            path = "/v1/chat/completions";
+        } else if (path.endsWith("/responses")) {
+            path = path.substring(0, path.length() - "/responses".length()) + "/chat/completions";
+        } else if (!path.endsWith("/chat/completions")) {
+            path += "/chat/completions";
+        }
+        return UriComponentsBuilder.fromUri(uri).replacePath(path).fragment(null).build(true).toUriString();
+    }
+
+    private String requestChatCompletion(List<Map<String, Object>> messages) throws java.io.IOException {
+        Map<String, Object> requestBody = Map.of(
+                "model", getModel(),
+                "messages", messages,
+                "stream", false);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(getApiKey());
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                getChatCompletionsUrl(), new HttpEntity<>(requestBody, headers), String.class);
+        if (response.getBody() == null || response.getBody().isBlank()) return null;
+        JsonNode root = objectMapper.readTree(response.getBody());
+        JsonNode content = root == null ? null : root.path("choices").path(0).path("message").path("content");
+        return content != null && content.isTextual() && !content.asText().isBlank() ? content.asText() : null;
+    }
 
     /**
      * 根据用户首次输入内容，调用豆包 AI 生成植保问答回复。
@@ -104,48 +146,12 @@ public class DoubaoAiService {
                             "用户问题：%s",
                     pestName);
 
-            // 构建请求体（豆包 Responses API 格式）
-            Map<String, Object> requestBody = Map.of(
-                    "model", getModel(),
-                    "input", List.of(
-                            Map.of(
-                                    "role", "user",
-                                    "content", List.of(
-                                            Map.of(
-                                                    "type", "input_text",
-                                                    "text", prompt)))));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(getApiKey());
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(getApiUrl(), entity, String.class);
-
-            // 解析响应，提取 AI 生成的文本
-            JsonNode root = objectMapper.readTree(response.getBody());
-            // Responses API 返回格式: { "output": [ { "type": "message", "content": [ { "type":
-            // "output_text", "text": "..." } ] } ] }
-            JsonNode output = root.path("output");
-            if (output.isArray()) {
-                for (JsonNode item : output) {
-                    if ("message".equals(item.path("type").asText())) {
-                        JsonNode content = item.path("content");
-                        if (content.isArray()) {
-                            for (JsonNode c : content) {
-                                if ("output_text".equals(c.path("type").asText())) {
-                                    String text = c.path("text").asText();
-                                    log.info("豆包 AI 分析完成，长度: {} 字符", text.length());
-                                    return text;
-                                }
-                            }
-                        }
-                    }
-                }
+            String text = requestChatCompletion(List.of(Map.of("role", "user", "content", prompt)));
+            if (text != null) {
+                log.info("AI 分析完成，长度: {} 字符", text.length());
+                return text;
             }
-
-            log.warn("豆包 AI 返回格式异常: {}", response.getBody());
+            log.warn("AI 分析未返回有效的 Chat Completions 文本");
             return "AI 分析暂时不可用，请稍后重试。";
 
         } catch (Exception e) {
@@ -171,7 +177,7 @@ public class DoubaoAiService {
                     "role", "system",
                     "content", "你是一位专业的农业植保专家，正在为农民解答关于【" + pestName + "】的病虫害防治问题。回答要专业、简明、贴近农业生产实际。"));
 
-            // 将历史消息转化为豆包 API 支持的格式
+            // 将历史消息转化为 OpenAI 兼容的 Chat Completions 格式
             // 如果只有文本，使用字符串 content；如果包含图片，使用数组格式
             for (com.example.leafquery.dto.ChatRequest.Message msg : history) {
                 if (msg.getImageBase64() != null && !msg.getImageBase64().isBlank()) {
@@ -197,39 +203,11 @@ public class DoubaoAiService {
                 }
             }
 
-            Map<String, Object> requestBody = Map.of(
-                    "model", getModel(),
-                    "messages", messagesList // 注意，Chat Completions 接口通常使用 messages 而不是 input
-            );
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(getApiKey());
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            // 豆包的 Chat Completions API 地址通常是 /api/v3/chat/completions
-            // 如果原来的 apiUrl 配置的是 /api/v3/responses，我们需要替换或者保证兼容
-            String chatApiUrl = getApiUrl();
-            if (chatApiUrl.endsWith("/responses")) {
-                chatApiUrl = chatApiUrl.replace("/responses", "/chat/completions");
+            String text = requestChatCompletion(messagesList);
+            if (text != null) {
+                return text;
             }
-
-            ResponseEntity<String> response = restTemplate.postForEntity(chatApiUrl, entity, String.class);
-
-            // 解析标准的 Chat Completions 响应结构
-            // { "choices": [ { "message": { "content": "..." } } ] }
-            JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode choices = root.path("choices");
-            if (choices.isArray() && choices.size() > 0) {
-                JsonNode messageNode = choices.get(0).path("message");
-                if (!messageNode.isMissingNode()) {
-                    String text = messageNode.path("content").asText();
-                    return text;
-                }
-            }
-
-            log.warn("豆包 AI 聊天返回格式异常: {}", response.getBody());
+            log.warn("AI 聊天未返回有效的 Chat Completions 文本");
             return "AI 聊天服务存在异常，未能返回有效内容。";
 
         } catch (Exception e) {
@@ -524,6 +502,7 @@ public class DoubaoAiService {
      * @return MP3 音频字节数组，失败返回 null
      */
     public byte[] textToSpeech(String text) throws Exception {
+        String ttsApiKey = getTtsApiKey();
         String ttsAppId = getTtsAppId();
         String ttsAccessToken = getTtsAccessToken();
         String ttsResourceId = getTtsResourceId();
@@ -531,8 +510,9 @@ public class DoubaoAiService {
 
         log.info("Seed-TTS: 接收到 TTS 请求, 文本长度: {} 字符", text.length());
 
-        if (ttsAppId == null || ttsAppId.isBlank() || ttsAccessToken == null || ttsAccessToken.isBlank()) {
-            throw new IllegalArgumentException("未配置 TTS 密钥 (tts.app.id / tts.access.token)");
+        boolean useApiKey = ttsApiKey != null && !ttsApiKey.isBlank();
+        if (!useApiKey && (ttsAppId == null || ttsAppId.isBlank() || ttsAccessToken == null || ttsAccessToken.isBlank())) {
+            throw new IllegalArgumentException("未配置 TTS 凭据：请设置 tts.api.key，或旧版 tts.app.id / tts.access.token");
         }
 
         // 截断过长文本（Seed-TTS 单次最多约 1000 字）
@@ -546,11 +526,16 @@ public class DoubaoAiService {
 
         // --- 2. 建立 WebSocket 连接 ---
         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
-        java.net.http.WebSocket webSocket = httpClient.newWebSocketBuilder()
-                .header("X-Api-App-Id", ttsAppId)
-                .header("X-Api-Access-Key", ttsAccessToken)
+        java.net.http.WebSocket.Builder ttsBuilder = httpClient.newWebSocketBuilder()
                 .header("X-Api-Resource-Id", ttsResourceId)
-                .buildAsync(
+                .header("X-Api-Request-Id", java.util.UUID.randomUUID().toString());
+        if (useApiKey) {
+            ttsBuilder.header("X-Api-Key", ttsApiKey);
+        } else {
+            ttsBuilder.header("X-Api-App-Id", ttsAppId)
+                    .header("X-Api-Access-Key", ttsAccessToken);
+        }
+        java.net.http.WebSocket webSocket = ttsBuilder.buildAsync(
                         java.net.URI.create("wss://openspeech.bytedance.com/api/v3/tts/unidirectional/stream"),
                         new java.net.http.WebSocket.Listener() {
                             private final java.io.ByteArrayOutputStream wsBuffer = new java.io.ByteArrayOutputStream();

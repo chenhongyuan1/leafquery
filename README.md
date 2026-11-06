@@ -210,10 +210,16 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 | `YOLO_DETECTION_BOX_THRESHOLD` | 检测框候选阈值 |
 | `YOLO_DETECTION_PRIMARY_THRESHOLD` | 主目标可信阈值 |
 | `DIFY_API_URL`、`DIFY_API_KEY` | Dify 工作流 |
-| `DOUBAO_API_URL`、`DOUBAO_API_KEY`、`DOUBAO_API_MODEL` | 连续问答模型 |
+| `DOUBAO_API_URL`、`DOUBAO_API_KEY`、`DOUBAO_API_MODEL` | 首页问答及连续追问（OpenAI 兼容 Chat Completions） |
 | `QWEATHER_API_HOST`、`QWEATHER_PROJECT_ID`、`QWEATHER_KEY_ID`、`QWEATHER_PRIVATE_KEY` | 和风天气 JWT 鉴权 |
 | `ASR_APP_ID`、`ASR_ACCESS_TOKEN`、`ASR_RESOURCE_ID` | 语音识别 |
-| `TTS_APP_ID`、`TTS_ACCESS_TOKEN`、`TTS_RESOURCE_ID`、`TTS_SPEAKER` | 语音合成 |
+| `TTS_API_KEY` | 语音合成新版 API Key，优先使用 |
+| `TTS_APP_ID`、`TTS_ACCESS_TOKEN` | 语音合成旧版凭据，未配置 `TTS_API_KEY` 时使用 |
+| `TTS_RESOURCE_ID`、`TTS_SPEAKER` | 语音合成资源版本与音色 |
+
+语音合成通过 WebSocket 单向流式接口调用，默认资源为 `seed-tts-2.0`。新版 Key 填入本机 `.env` 的 `TTS_API_KEY`，仅通过 `X-Api-Key` 请求头发送。语音配置按“数据库中非空的 `model_config` 配置 → 环境配置”读取；数据库已有 `tts.api.key` 时，修改 `.env` 不会覆盖它。只修改 `.env` 后执行 `start-all.cmd restart-backend` 重新读取；通过管理端修改数据库配置后，下次请求生效。服务器部署时单独注入对应变量。
+
+首页 AI 问答使用 OpenAI 兼容的 `messages` 请求和 `choices[0].message.content` 响应。保留 `DOUBAO_*` 配置名：地址可以是完整 `/chat/completions` 地址或基础地址（例如 `https://api.openai.com/v1`），旧 `/responses` 地址会自动转为对应的 Chat Completions 路径。使用其他兼容服务时，模型 ID 和 Key 必须与该服务匹配。管理端模型配置表中的非空值优先于环境变量；修改 `.env` 后需重新启动后端，管理端修改则在下次请求读取。
 
 ### 4. 一键启动（推荐）
 
@@ -230,6 +236,23 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 四个服务地址分别为：用户端 `http://localhost:5173`、管理端 `http://localhost:5174`、Java `http://localhost:8080`、Python `http://localhost:5000`。日志位于仓库根目录的 `.leafquery-runtime/logs/`。旧版本若没有启动文件，可使用下面的手动启动方式。
 
 预检只确认 MySQL 端口可连接；启动成功后，还会请求数据库资讯接口检查实际业务连接。启动器不会导入 SQL 或重建表。重复 `start` 不会刷新已运行服务的配置，修改后端参数后使用 `restart-backend`。
+
+#### Dify 云端调用本机天气接口
+
+Dify 云端的 `localhost` 指向云端自身。继续使用本机后端联调时，可以通过第三方 Pinggy 建立临时 HTTPS 入口，城市编号和天气 JSON 会经过该服务。当前按用户要求无需自定义请求头，只接受指定天气路径的 GET 查询；其他业务路径返回 404。
+
+先启动本机服务，在确认使用 Pinggy 后执行：
+
+```powershell
+.\start-weather-tunnel.cmd start   # 只公开天气查询接口，无需自定义请求头
+.\start-weather-tunnel.cmd status  # 查看临时地址与配置文件位置
+.\start-weather-tunnel.cmd restart-gateway # 更新网关实现，保留现有隧道地址
+.\start-weather-tunnel.cmd stop    # 关闭入口，保留 Java 后端运行
+```
+
+需要 Node.js 和 Windows OpenSSH 客户端。Dify HTTP 节点使用 GET，URL 从 `.leafquery-runtime/weather-tunnel/dify-connection.txt` 复制；查询参数名为 `locationId`，值选择工作流的 `location_id` 变量。鉴权选择“无”、HEADERS 留空、BODY 选择 `none`。和风天气 JWT 仍由 Java 后端生成。
+
+Pinggy 免费入口每次最长 60 分钟，重新启动后地址会变化；保持电脑、后端和隧道运行。网关只转发 `/api/weather/features`，不会转发其他业务路径。详细范围、测试与当前限制见 [联调记录](docs/biz-modules/04-dify-weather-tunnel/README.md) 和 [Pinggy 官方说明](https://pinggy.io/)。
 
 ### 5. 手动启动（IDE 或没有启动器时）
 

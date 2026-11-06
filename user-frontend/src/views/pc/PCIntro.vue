@@ -53,11 +53,11 @@ onBeforeUnmount(() => {
       <div class="intro-copy">
         <p class="intro-eyebrow"><span aria-hidden="true"></span>图像识别 × 智能复核</p>
         <h1 class="intro-title">
-          <span>读懂叶片变化，</span>
-          <span class="intro-title-accent">让植保更有依据。</span>
+          <span>识别作物病虫害，</span>
+          <span class="intro-title-accent">让防治更有依据。</span>
         </h1>
         <p class="intro-description">
-          上传叶片图片，识别病虫害。结合智能复核与气象信息，获取作物健康分析和防治参考。
+          上传作物图片，识别病害与虫害。结合智能复核与气象信息，分析病虫害发生风险，提供防治参考。
         </p>
 
         <div class="intro-action-row">

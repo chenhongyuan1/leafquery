@@ -637,7 +637,7 @@ const targetOverviewOption = computed(() => ({
     </div>
 
     <div v-else class="space-y-6">
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <section class="rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-900 p-7 text-white shadow-[0_28px_90px_rgba(15,23,42,0.2)] dark:border-slate-800">
           <div class="flex flex-wrap items-center gap-2">
             <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.18em] text-white/80">作物视角</span>
@@ -645,7 +645,7 @@ const targetOverviewOption = computed(() => ({
             <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">{{ todayRiskMeta.label }}</span>
             <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">天气{{ weatherPressure.label }}</span>
           </div>
-          <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_0.9fr]">
+          <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
             <div>
               <div class="text-sm font-bold uppercase tracking-[0.18em] text-white/[0.55]">Risk Outlook</div>
               <div class="mt-3 text-5xl font-black" :class="todayRiskMeta.text.replace('500', '300')">{{ Math.round(todayRiskScore * 100) }}%</div>
@@ -730,7 +730,7 @@ const targetOverviewOption = computed(() => ({
         </section>
       </div>
 
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[0.88fr_1.12fr]">
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
         <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
           <div class="mb-4 flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">置信度分析</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">识别结果可信区间结构。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">平均 {{ Math.round(averageConfidence * 100) }}%</span></div>
           <VChart :option="confidenceBucketOption" autoresize style="height: 300px;" />
@@ -785,7 +785,7 @@ const targetOverviewOption = computed(() => ({
             <div v-else class="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
               当前选中的 <span class="font-bold">{{ currentTargetTypeLabel }} · {{ currentTargetLabel }}</span> 不在本次图表筛选范围内，折线图仅展示 {{ comparisonViewMode === 'DISEASE' ? '病害' : comparisonViewMode === 'PEST' ? '虫害' : '全部对象' }}。
             </div>
-            <div class="grid grid-cols-1 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <div class="pc-data-soft rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/[0.55]">
                 <div class="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -819,7 +819,7 @@ const targetOverviewOption = computed(() => ({
         </section>
       </div>
 
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <section class="pc-data-panel rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
           <div class="flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">天气摘要</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">由天气特征接口与趋势预测摘要共同驱动。</p></div><span class="rounded-full px-3 py-1 text-xs font-bold" :class="weatherPressure.chip">{{ weatherPressure.label }} {{ weatherPressure.score }}</span></div>
           <div v-if="weatherError" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{{ weatherError }}</div>
@@ -865,12 +865,15 @@ const targetOverviewOption = computed(() => ({
 :global(.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover) { background: #475569; }
 
 .pc-data-panel {
+  /* Canvas pixel widths must not become a grid item's minimum width. */
+  min-width: 0;
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(226, 232, 240, 0.92);
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
 .pc-data-soft {
+  min-width: 0;
   background: rgba(248, 250, 252, 0.96);
   border-color: rgba(226, 232, 240, 0.9);
 }
