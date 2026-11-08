@@ -13,7 +13,11 @@ public record RecordRequest(
     String locationId,
     String city,
     String region,
-    String imageUrl
+    String imageUrl,
+    Boolean yoloUsed,
+    Boolean reviewRequired,
+    String reviewResult,
+    String reviewError
 ) {
     public Record toEntity() {
         Record value = new Record();
@@ -22,6 +26,10 @@ public record RecordRequest(
         value.setCropName(cropName);
         value.setPestName(pestName);
         value.setConfidence(confidence);
+        value.setYoloUsed(yoloUsed);
+        value.setReviewRequired(reviewRequired);
+        value.setReviewResult(reviewResult);
+        value.setReviewError(reviewError);
         value.setLocationId(locationId);
         value.setCity(city);
         value.setRegion(region);

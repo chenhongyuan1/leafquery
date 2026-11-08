@@ -2,7 +2,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { diagnosisApi, recordApi } from '../../api/index.js'
+import MarkdownContent from '../../components/common/MarkdownContent.vue'
+import ThoughtLine from '../../components/common/ThoughtLine.vue'
+import RecordDetailSheet from '../../components/RecordDetailSheet.vue'
+import { useFarmStore } from '../../stores/farmStore'
 import { useSettingsStore } from '../../stores/settings'
+import { categoryOptions } from '../../utils/detectionCategories.js'
 import { isMeaninglessReview, MEANINGLESS_REVIEW_REPORT_MESSAGE } from '../../utils/reviewConclusion.js'
 import { AUTH_CHANGE_EVENT, getStoredUser } from '../../utils/accountSecurity'
 import {
@@ -23,15 +28,9 @@ import {
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
+const farmStore = useFarmStore()
 
 // ===== 类别选择 =====
-const categoryOptions = [
-  { key: 'rice',   label: '水稻', value: '水稻', icon: '🌾', group: 'disease' },
-  { key: 'corn',   label: '玉米', value: '玉米', icon: '🌽', group: 'disease' },
-  { key: 'wheat',  label: '小麦', value: '小麦', icon: '🌾', group: 'disease' },
-  { key: 'other',  label: '其他', value: '其他', icon: '📋', group: 'disease' },
-  { key: 'pest',   label: '虫害', value: '虫害', icon: '🐛', group: 'pest'    },
-]
 const selectedCategories = ref([])
 const toggleCategory = (value) => {
   const idx = selectedCategories.value.indexOf(value)
@@ -549,6 +548,7 @@ const sceneBadgeClassMap = {
 
 // 识别历史记录
 const historyItems = ref(JSON.parse(localStorage.getItem('leafquery_history') || '[]'))
+const selectedHistoryRecord = ref(null)
 
 const refreshNotificationBadge = async () => {
   try {
@@ -590,6 +590,7 @@ onMounted(async () => {
       const response = await recordApi.list(user.userId)
       if (response.data && response.data.code === 200) {
         historyItems.value = response.data.data.map(item => ({
+          ...item,
           id: item.id,
           name: item.pestName,
           confidence: item.confidence,
@@ -661,6 +662,10 @@ const persistFinalizedDetection = async result => {
     id: Date.now(),
     name: result.pestName,
     confidence: result.confidence,
+    yoloUsed: yoloUsed.value,
+    reviewRequired: reviewRequired.value,
+    reviewResult: result.reviewResult || '',
+    reviewError: result.reviewError || '',
     time: Date.now(),
     imageUrl: result.imageUrl
   }
@@ -670,18 +675,8 @@ const persistFinalizedDetection = async result => {
   localStorage.setItem('leafquery_history', JSON.stringify(historyItems.value))
 
   try {
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      if (user && user.userId) {
-        await recordApi.add({
-          userId: user.userId,
-          pestName: result.pestName,
-          confidence: result.confidence,
-          imageUrl: result.imageUrl
-        })
-      }
-    }
+    // The shared store persists the full snapshot for both guest and signed-in histories.
+    await farmStore.saveIdentification({ ...newRecord, pestName: result.pestName })
   } catch (e) {
     console.error('Failed to sync record to cloud:', e)
   }
@@ -816,28 +811,17 @@ const onScanFileSelected = async (event) => {
 
 // ====== 阶段 3：按需生成诊断报告 ======
 const isGeneratingReport = ref(false)
-const reportLoadingSteps = [
-  '检查本地气象数据...',
-  '索引病虫害知识库...',
-  '参考初筛与复核结果...',
-  '构建多维度推理中...',
-  'AI 诊断报告生成中...'
-]
-const reportLoadingText = ref(reportLoadingSteps[0])
-let reportLoadingInterval = null
+const reportStartedAt = ref(0)
+const reportFinishedAt = ref(0)
+const chatStartedAt = ref(0)
+const chatFinishedAt = ref(0)
 
 const generateReport = async () => {
   if (isGeneratingReport.value || isMeaninglessDiagnosis.value) return
   isGeneratingReport.value = true
 
-  let stepIndex = 0
-  reportLoadingText.value = reportLoadingSteps[0]
-  reportLoadingInterval = setInterval(() => {
-    stepIndex++
-    if (stepIndex < reportLoadingSteps.length) {
-      reportLoadingText.value = reportLoadingSteps[stepIndex]
-    }
-  }, 3500)
+  reportStartedAt.value = Date.now()
+  reportFinishedAt.value = 0
 
   try {
     const params = new URLSearchParams()
@@ -866,7 +850,7 @@ const generateReport = async () => {
     showToast('诊断报告生成失败：' + (err.response?.data?.error || '请检查网络'), 'error')
   } finally {
     isGeneratingReport.value = false
-    if (reportLoadingInterval) clearInterval(reportLoadingInterval)
+    reportFinishedAt.value = Date.now()
   }
 }
 
@@ -889,6 +873,8 @@ const sendMessage = async () => {
   scrollToBottom()
   
   isSending.value = true
+  chatStartedAt.value = Date.now()
+  chatFinishedAt.value = 0
   pendingImage.value = ''
 
   try {
@@ -902,6 +888,7 @@ const sendMessage = async () => {
     showToast('发送消息失败，请稍后重试', 'error')
   } finally {
     isSending.value = false
+    chatFinishedAt.value = Date.now()
     scrollToBottom()
   }
 }
@@ -935,18 +922,6 @@ const scrollToBottom = () => {
       chatContainer.value.scrollTop = chatContainer.value.scrollHeight
     }
   }, 100)
-}
-
-// 简单渲染富文本标记（粗略处理标题和列表）
-const renderMarkdown = (text) => {
-  if (!text) return ''
-  let html = text
-  html = html.replace(/### (.*)/g, '<h4 class="font-bold text-slate-800 mt-4 mb-2 text-md">$1</h4>')
-  html = html.replace(/## (.*)/g, '<h3 class="font-bold text-slate-900 mt-6 mb-3 text-lg border-b pb-2 flex items-center"><span class="w-1.5 h-5 bg-green-500 rounded-full mr-2"></span>$1</h3>')
-  html = html.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold text-slate-800">$1</span>')
-  html = html.replace(/- (.*)/g, '<li class="ml-4 list-disc marker:text-green-500 mb-1">$1</li>')
-  html = html.replace(/\n\n/g, '<br/>')
-  return html
 }
 
 // 历史条目的表情图标
@@ -1215,9 +1190,13 @@ const formatTime = (item) => {
              <span class="block text-[10px] text-slate-300 font-medium mt-1">--</span>
           </div>
         </div>
-        <div
+        <button
           v-for="item in historyItems"
           :key="item.id"
+          type="button"
+          :aria-label="`查看${item.name}的识别记录`"
+          data-testid="record-detail-trigger"
+          @click="selectedHistoryRecord = item"
           class="flex-shrink-0 w-24 h-28 bg-white rounded-2xl p-3 border border-slate-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col items-center justify-center space-y-2 transition-all duration-300 hover:shadow-md"
         >
           <div class="w-10 h-10 bg-green-50 text-green-500 rounded-full flex items-center justify-center text-lg overflow-hidden shrink-0">
@@ -1228,7 +1207,7 @@ const formatTime = (item) => {
              <span class="block text-xs font-bold text-slate-800 truncate w-full">{{ item.name }}</span>
              <span class="block text-[10px] text-slate-400 font-medium mt-1">{{ formatTime(item) }}</span>
           </div>
-        </div>
+        </button>
       </div>
     </div>
     
@@ -1281,6 +1260,8 @@ const formatTime = (item) => {
       </div>
     </div>
     
+    <RecordDetailSheet :record="selectedHistoryRecord" @close="selectedHistoryRecord = null" />
+
     <!-- 结果弹窗 -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
@@ -1362,7 +1343,7 @@ const formatTime = (item) => {
                     <span class="text-base">🔍</span>
                     <span class="text-sm font-bold text-emerald-800">AI 视觉复核结果</span>
                   </div>
-                  <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ detectionResult.reviewResult }}</div>
+                  <MarkdownContent class="text-sm text-slate-700" :content="detectionResult.reviewResult" />
                 </div>
 
                 <!-- 待复核提示（二次复核失败时） -->
@@ -1390,7 +1371,7 @@ const formatTime = (item) => {
                 >
                   <template v-if="isGeneratingReport">
                     <svg class="animate-spin w-5 h-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                    <span class="animate-pulse truncate">{{ reportLoadingText }}</span>
+                    <span class="animate-pulse truncate">正在生成诊断报告…</span>
                   </template>
                   <template v-else>
                     <span>📝</span>
@@ -1398,6 +1379,8 @@ const formatTime = (item) => {
                     <span v-if="reviewRequired" class="text-xs opacity-80 ml-1">(推荐)</span>
                   </template>
                 </button>
+
+                <ThoughtLine v-if="isGeneratingReport" kind="report" :working="true" :started-at="reportStartedAt" />
 
                 <!-- 已有报告时：查看报告按钮 -->
                 <button 
@@ -1448,10 +1431,11 @@ const formatTime = (item) => {
                 </div>
                 
                 <div v-for="(msg, index) in messages" :key="index" class="flex w-full" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
-                  <div v-if="msg.role === 'assistant'" class="flex items-start space-x-3 max-w-[95%]">
+                  <div v-if="msg.role === 'assistant'" class="flex items-start space-x-3 max-w-[95%] min-w-0 w-full">
                     <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
-                    <div class="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm">
-                      <div class="markdown-body text-slate-700 text-sm leading-relaxed" v-html="renderMarkdown(msg.content)"></div>
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm min-w-0 flex-1">
+                      <ThoughtLine v-if="index === 0 && detectionResult.report && reportStartedAt" kind="report" :working="false" :started-at="reportStartedAt" :finished-at="reportFinishedAt" />
+                      <MarkdownContent class="text-slate-700 text-sm" :content="msg.content" />
                     </div>
                   </div>
                   <div v-else class="flex items-end space-x-2 max-w-[85%]">
@@ -1464,13 +1448,9 @@ const formatTime = (item) => {
                   </div>
                 </div>
 
-                <div v-if="isSending" class="flex items-start space-x-3 max-w-[95%]">
+                <div v-if="isSending" class="flex items-start space-x-3 max-w-[95%] min-w-0 w-full">
                    <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0 shadow-md">AI</div>
-                   <div class="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm flex items-center space-x-1">
-                     <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                     <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                     <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
-                   </div>
+                   <div class="min-w-0 flex-1"><ThoughtLine kind="chat" :working="true" :started-at="chatStartedAt" /></div>
                 </div>
               </div>
 

@@ -196,6 +196,7 @@ function maskValue(key, val) {
       <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.8;">
         使用 <span class="badge yellow">豆包 SeedASR</span> 语音大模型提供语音转文字功能，
         支持普通话及多种方言。通过 WebSocket 协议与火山引擎通信。
+        新版凭据请配置 asr.api.key，优先于旧版 AppID / Access Token；同时确认 Key 已获得所选识别资源的权限。保存后从下一次识别请求生效。
       </p>
     </div>
 

@@ -40,6 +40,9 @@ public class DoubaoAiService {
     @Value("${doubao.api.model:}")
     private String defaultModel;
 
+    @Value("${asr.api.key:}")
+    private String defaultAsrApiKey;
+
     @Value("${asr.app.id:}")
     private String defaultAsrAppId;
 
@@ -85,6 +88,7 @@ public class DoubaoAiService {
     private String getApiUrl() { return getConfig("doubao.api.url", defaultApiUrl); }
     private String getApiKey() { return getConfig("doubao.api.key", defaultApiKey); }
     private String getModel()  { return getConfig("doubao.api.model", defaultModel); }
+    private String getAsrApiKey() { return getConfig("asr.api.key", defaultAsrApiKey); }
     private String getAsrAppId() { return getConfig("asr.app.id", defaultAsrAppId); }
     private String getAsrAccessToken() { return getConfig("asr.access.token", defaultAsrAccessToken); }
     private String getAsrResourceId() { return getConfig("asr.resource.id", defaultAsrResourceId); }
@@ -234,12 +238,14 @@ public class DoubaoAiService {
     public String speechToText(org.springframework.web.multipart.MultipartFile audioFile, String dialect) {
         log.info("豆包 SeedASR: 接收到语音识别请求, 文件大小: {} bytes, 方言: {}", audioFile.getSize(), dialect);
 
+        String asrApiKey = getAsrApiKey();
         String asrAppId = getAsrAppId();
         String asrAccessToken = getAsrAccessToken();
         String asrResourceId = getAsrResourceId();
-        if (asrAppId == null || asrAppId.isBlank() || asrAccessToken == null || asrAccessToken.isBlank()) {
-            log.warn("未配置 ASR 密钥 (asr.app.id / asr.access.token)");
-            return "请在模型管理中配置 asr.app.id 和 asr.access.token";
+        boolean useApiKey = asrApiKey != null && !asrApiKey.isBlank();
+        if (!useApiKey && (asrAppId == null || asrAppId.isBlank() || asrAccessToken == null || asrAccessToken.isBlank())) {
+            log.warn("未配置 ASR 凭据");
+            return "请在模型管理中配置 asr.api.key，或旧版 asr.app.id 和 asr.access.token";
         }
 
         try {
@@ -251,12 +257,17 @@ public class DoubaoAiService {
 
             // --- 2. 建立 WebSocket 连接 (鉴权通过 HTTP Header) ---
             java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
-            java.net.http.WebSocket webSocket = httpClient.newWebSocketBuilder()
-                    .header("X-Api-App-Key", asrAppId)
-                    .header("X-Api-Access-Key", asrAccessToken)
+            java.net.http.WebSocket.Builder asrBuilder = httpClient.newWebSocketBuilder()
                     .header("X-Api-Resource-Id", asrResourceId)
                     .header("X-Api-Connect-Id", connectId)
-                    .buildAsync(
+                    .header("X-Api-Request-Id", connectId);
+            if (useApiKey) {
+                asrBuilder.header("X-Api-Key", asrApiKey);
+            } else {
+                asrBuilder.header("X-Api-App-Key", asrAppId)
+                        .header("X-Api-Access-Key", asrAccessToken);
+            }
+            java.net.http.WebSocket webSocket = asrBuilder.buildAsync(
                             java.net.URI.create("wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"),
                             new java.net.http.WebSocket.Listener() {
                                 private final java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
@@ -326,8 +337,22 @@ public class DoubaoAiService {
             log.error("豆包 SeedASR: 识别超时", e);
             return "语音识别超时，请重试。";
         } catch (Exception e) {
+            Throwable cause = e;
+            while ((cause instanceof java.util.concurrent.ExecutionException
+                    || cause instanceof java.util.concurrent.CompletionException) && cause.getCause() != null) {
+                cause = cause.getCause();
+            }
+            if (cause instanceof java.net.http.WebSocketHandshakeException handshake) {
+                int status = handshake.getResponse().statusCode();
+                log.warn("豆包 SeedASR: WebSocket 握手被拒绝, HTTP {}, resourceId={}", status, asrResourceId);
+                if (status == 401 || status == 403) {
+                    return "语音识别失败：语音服务鉴权或资源授权失败（HTTP " + status
+                            + "），请检查 asr.api.key 和 asr.resource.id；旧版凭据请检查 AppID 与 Access Token。";
+                }
+                return "语音识别失败：语音服务连接被拒绝（HTTP " + status + "），请稍后重试。";
+            }
             log.error("豆包 SeedASR: 语音识别失败", e);
-            return "语音识别失败: " + e.getMessage();
+            return "语音识别失败，请稍后重试。";
         }
     }
 

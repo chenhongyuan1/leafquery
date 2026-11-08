@@ -165,6 +165,8 @@ mysql -u root -p leafquery < src/main/resources/schema.sql
 
 > `schema.sql` 包含删除并重建表的语句，只应对新的开发数据库执行，不要直接用于已有生产数据。
 
+已有数据库使用识别历史 AI 复核功能前，先执行一次 [识别记录增量升级 SQL](src/main/resources/migrations/20261106-record-review.sql)，再部署新版后端。该脚本只增加四个可空字段，保留旧记录；旧记录不会自动补出曾经未保存的复核结果。已升级的数据库无需重复执行。
+
 ### 3. 配置环境变量
 
 在应用仓库根目录准备本地配置：
@@ -212,14 +214,20 @@ Spring Boot 本身不会自动读取 `.env`。下文直接用 Maven 或 IDE 启�
 | `DIFY_API_URL`、`DIFY_API_KEY` | Dify 工作流 |
 | `DOUBAO_API_URL`、`DOUBAO_API_KEY`、`DOUBAO_API_MODEL` | 首页问答及连续追问（OpenAI 兼容 Chat Completions） |
 | `QWEATHER_API_HOST`、`QWEATHER_PROJECT_ID`、`QWEATHER_KEY_ID`、`QWEATHER_PRIVATE_KEY` | 和风天气 JWT 鉴权 |
-| `ASR_APP_ID`、`ASR_ACCESS_TOKEN`、`ASR_RESOURCE_ID` | 语音识别 |
+| `ASR_API_KEY` | 语音识别新版 API Key，优先使用 |
+| `ASR_APP_ID`、`ASR_ACCESS_TOKEN` | 语音识别旧版凭据，未配置 `ASR_API_KEY` 时使用 |
+| `ASR_RESOURCE_ID` | 语音识别资源版本，默认 `volc.seedasr.sauc.duration` |
 | `TTS_API_KEY` | 语音合成新版 API Key，优先使用 |
 | `TTS_APP_ID`、`TTS_ACCESS_TOKEN` | 语音合成旧版凭据，未配置 `TTS_API_KEY` 时使用 |
 | `TTS_RESOURCE_ID`、`TTS_SPEAKER` | 语音合成资源版本与音色 |
 
 语音合成通过 WebSocket 单向流式接口调用，默认资源为 `seed-tts-2.0`。新版 Key 填入本机 `.env` 的 `TTS_API_KEY`，仅通过 `X-Api-Key` 请求头发送。语音配置按“数据库中非空的 `model_config` 配置 → 环境配置”读取；数据库已有 `tts.api.key` 时，修改 `.env` 不会覆盖它。只修改 `.env` 后执行 `start-all.cmd restart-backend` 重新读取；通过管理端修改数据库配置后，下次请求生效。服务器部署时单独注入对应变量。
 
+语音识别使用 `ASR_API_KEY` / 模型管理中的 `asr.api.key`，同样通过 `X-Api-Key` 鉴权，并优先于旧版 AppID / Access Token。Key 必须获得 `ASR_RESOURCE_ID` 对应的识别资源权限；合成与识别分别配置，不会自动互相读取 Key。数据库非空配置优先于环境配置，修改环境文件后需要重启后端。若提示握手 HTTP 401/403，应检查凭据及识别资源授权。
+
 首页 AI 问答使用 OpenAI 兼容的 `messages` 请求和 `choices[0].message.content` 响应。保留 `DOUBAO_*` 配置名：地址可以是完整 `/chat/completions` 地址或基础地址（例如 `https://api.openai.com/v1`），旧 `/responses` 地址会自动转为对应的 Chat Completions 路径。使用其他兼容服务时，模型 ID 和 Key 必须与该服务匹配。管理端模型配置表中的非空值优先于环境变量；修改 `.env` 后需重新启动后端，管理端修改则在下次请求读取。
+
+PC 工作台已接入已有后端：切换“识别”→选择识别类型并上传图片→发送后查看真实识别与复核结果；点击“生成诊断报告”会在下方对话区生成报告，点击“询问”可围绕这条识别继续追问。登录用户的识别快照同步云端，完整报告和对话按账号保存在当前浏览器。原模型名称和强度界面暂时保留，实际问答沿用管理端配置；切换展示名称不会覆盖服务端配置。若问答提示接入点关闭，在管理端更新有效的模型接入点后可重新发送。
 
 ### 4. 一键启动（推荐）
 

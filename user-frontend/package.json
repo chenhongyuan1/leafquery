@@ -8,8 +8,15 @@
     "build": "vite build",
     "test": "node --test test/api.test.js test/introInteraction.test.js test/plantSceneMotion.test.js test/reviewConclusion.test.js",
     "test:layout": "node --test test/dataCenterLayout.browser.test.js",
+    "test:navigation": "node --test test/pageNavigation.browser.test.js",
+    "test:records": "node --test test/recordDetail.browser.test.js test/recordReviewFlow.browser.test.js",
     "test:sidebar": "node --test test/pcSidebar.browser.test.js",
     "test:diagnosis": "node --test test/diagnosisFlow.browser.test.js",
+    "test:prompt": "node --test test/promptInput.browser.test.js",
+    "test:workspace": "node --test test/workspacePreview.browser.test.js",
+    "test:workspace-api": "node --test test/workspaceBackend.browser.test.js",
+    "test:rendering": "node --test test/workspaceRendering.browser.test.js",
+    "test:workspace-delete": "node --test test/workspaceDelete.browser.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,6 +28,7 @@
     "dayjs": "^1.11.20",
     "echarts": "^6.0.0",
     "gsap": "^3.14.2",
+    "markdown-it": "^15.0.3",
     "pinia": "^3.0.4",
     "three": "^0.182.0",
     "vue": "^3.5.25",

@@ -71,13 +71,13 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
     async function setCollapsed(collapsed) {
       const expanded = await page.$eval('.pc-sidebar-toggle', el => el.getAttribute('aria-expanded') === 'true')
       if (expanded === collapsed) await page.click('.pc-sidebar-toggle')
-      await page.waitForFunction(width => Math.abs(document.querySelector('#pc-sidebar').getBoundingClientRect().width - width) < 0.5, {}, collapsed ? 80 : 256)
+      await page.waitForFunction(width => Math.abs(document.querySelector('#pc-sidebar').getBoundingClientRect().width - width) < 0.5, {}, collapsed ? 80 : 220)
       await pause(80)
     }
     function assertCentered(before, after) {
       assert.ok(Math.abs(after.main.width - before.main.width) < 1, '收起不能拉宽主内容')
-      assert.ok(Math.abs(after.main.left - (before.main.left - 88)) < 1, '主内容应向左居中移动 88px')
-      assert.ok(Math.abs(after.main.width + after.gutter - (after.viewport - 256)) < 1, '保持展开侧栏时的基准内容宽度')
+      assert.ok(Math.abs(after.main.left - (before.main.left - 70)) < 1, '主内容应向左居中移动 70px')
+      assert.ok(Math.abs(after.main.width + after.gutter - (after.viewport - 220)) < 1, '保持展开侧栏时的基准内容宽度')
       assert.ok(Math.abs(after.chrome.left - after.sidebar.right) < 1 && Math.abs(after.chrome.right - after.viewport) < 1, '页面表面应铺满侧栏以外区域')
       assert.ok(after.scrollWidth <= after.viewport, '不能出现页面横向溢出')
     }
@@ -86,6 +86,8 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
     await enterWorkspace()
     await t.test('点击动画与键盘控制保持页面实例及内容宽度', async () => {
       const before = await dimensions()
+      assert.ok(Math.abs(before.sidebar.width - 220) < 1, '展开宽度应为 220px')
+      assert.ok(await page.$eval('#pc-sidebar .brand-name', el => el.getBoundingClientRect().right < document.querySelector('#pc-sidebar').getBoundingClientRect().right), '展开时完整品牌应在侧栏内显示')
       const content = await page.$('.pc-main > div > *')
       assert.ok(content)
       await page.screenshot({ path: resolve(evidence, 'expanded.png') })
@@ -96,7 +98,7 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
       assert.equal(await page.$eval('.pc-sidebar-toggle', el => el.getAttribute('aria-controls')), 'pc-sidebar')
       await page.focus('.pc-sidebar-toggle')
       await page.keyboard.press('Enter')
-      await page.waitForFunction(() => Math.abs(document.querySelector('#pc-sidebar').getBoundingClientRect().width - 256) < 0.5)
+      await page.waitForFunction(() => Math.abs(document.querySelector('#pc-sidebar').getBoundingClientRect().width - 220) < 0.5)
       assert.ok(Math.abs((await dimensions()).main.left - before.main.left) < 1)
       await page.keyboard.press('Space')
       await page.waitForFunction(() => Math.abs(document.querySelector('#pc-sidebar').getBoundingClientRect().width - 80) < 0.5)
@@ -179,6 +181,9 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
       await page.click('#pc-sidebar nav button[aria-label="数据中心"]')
       await page.waitForSelector('.pc-data-page canvas')
       await pause(300)
+      // The new minimal dashboard fits one screen at normal heights; short screens scroll.
+      await page.setViewport({ width: 1600, height: 720 })
+      await pause(350)
       await assertPageScroll('.pc-data-page')
       await page.screenshot({ path: resolve(evidence, 'data-center-soft-shadows.png') })
       await page.evaluate(() => {
@@ -222,7 +227,7 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
       await page.locator('#pc-sidebar button[aria-label="退出登录"]').click()
       await page.waitForSelector('#pc-sidebar button[aria-label="登录系统"]')
     })
-    await t.test('Logo 悬停显示展开标识，收起按钮位于侧栏内部', async () => {
+    await t.test('Logo 悬停显示展开标识，收起按钮位于顶部品牌右侧', async () => {
       await setCollapsed(true)
       await page.hover('#pc-sidebar .pc-sidebar-brand-button')
       await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.pc-sidebar-open-icon')).opacity) === 1)
@@ -232,12 +237,20 @@ test('PC 侧栏收起时主内容仅居中移动并保留导航和账号操作',
       await page.click('#pc-sidebar button[aria-label="展开侧边栏"]')
       await setCollapsed(false)
       assert.equal(await page.$eval('.pc-sidebar-toggle', el => Boolean(el.closest('#pc-sidebar'))), true)
+      assert.equal(await page.$eval('.pc-sidebar-toggle', el => Boolean(el.closest('.pc-sidebar-brand'))), true, '收起按钮应在顶部品牌区')
+      const control = await page.evaluate(() => {
+        const button = document.querySelector('.pc-sidebar-close').getBoundingClientRect()
+        const name = document.querySelector('#pc-sidebar .brand-name').getBoundingClientRect()
+        return { buttonLeft: button.left, nameRight: name.right, verticalGap: Math.abs(button.top + button.height / 2 - name.top - name.height / 2) }
+      })
+      assert.ok(control.buttonLeft >= control.nameRight && control.verticalGap < 16, '收起按钮应在品牌文字右侧，且不重叠')
+      assert.equal(await page.$('.pc-sidebar-tools'), null, '导航区不应再保留独立收起工具行')
       assert.equal(await page.$('.pc-main .pc-sidebar-toggle'), null)
       await page.click('#pc-sidebar button[aria-label="返回 LeafQuery 介绍页"]')
       await page.waitForFunction(() => !document.querySelector('#pc-sidebar'))
       assert.equal(await page.$eval('.pc-intro .brand-copy', el => el.getAttribute('aria-hidden')), 'false')
       await enterWorkspace()
-      assert.ok(Math.abs((await dimensions()).sidebar.width - 256) < 1)
+      assert.ok(Math.abs((await dimensions()).sidebar.width - 220) < 1)
       await setCollapsed(true)
     })
     await t.test('减少动态时取消宽度过渡', async () => {

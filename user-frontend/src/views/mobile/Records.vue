@@ -2,10 +2,12 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFarmStore } from '../../stores/farmStore'
+import RecordDetailSheet from '../../components/RecordDetailSheet.vue'
 
 const router = useRouter()
 const farmStore = useFarmStore()
 const historyRecords = computed(() => (farmStore.identificationHistory || []).map(item => ({
+  ...item,
   id: item.id,
   name: item.pestName || item.name || '',
   confidence: Number(item.confidence || 0),
@@ -16,6 +18,7 @@ const isLoading = ref(true)
 const showClearConfirm = ref(false)
 const isClearing = ref(false)
 const deletingId = ref(null)
+const selectedRecord = ref(null)
 
 onMounted(async () => {
   await farmStore.initialize()
@@ -146,6 +149,7 @@ const getEmoji = (name) => {
             class="bg-white rounded-[1.5rem] p-4 flex items-center shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-50 transition-colors group"
             :style="{ transitionDelay: `${index * 50}ms` }"
           >
+            <button type="button" class="flex min-w-0 flex-1 items-center rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500" :aria-label="`查看${item.name}的识别记录`" data-testid="record-detail-trigger" @click="selectedRecord = item">
             <!-- 左侧图片 / 表情缩略图 -->
             <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl overflow-hidden shrink-0 shadow-inner mr-4 relative">
               <img v-if="item.imageUrl && item.imageUrl.trim() !== ''" :src="item.imageUrl" class="w-full h-full object-cover" @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline'" />
@@ -174,16 +178,18 @@ const getEmoji = (name) => {
               </div>
             </div>
 
+            </button>
             <!-- 删除按钮 -->
             <button
               @click.stop="deleteRecord(item, index)"
               :disabled="deletingId === item.id"
-              class="ml-3 shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 active:scale-90 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+              class="ml-3 shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 active:scale-90 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
               :class="{ 'opacity-100': deletingId === item.id }"
+              :aria-label="`删除识别记录：${getCleanName(item.name)}`"
               title="删除此条记录"
             >
               <svg v-if="deletingId !== item.id" xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" />
               </svg>
               <div v-else class="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
             </button>
@@ -191,6 +197,8 @@ const getEmoji = (name) => {
         </transition-group>
       </div>
     </div>
+
+    <RecordDetailSheet :record="selectedRecord" @close="selectedRecord = null" />
 
     <!-- 清空确认弹窗 -->
     <Transition

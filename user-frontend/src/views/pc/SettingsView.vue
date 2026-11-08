@@ -142,8 +142,6 @@ const formatDateTime = (value) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-const formatConfidence = (value) => `${(Number(value || 0) * 100).toFixed(1)}%`
-
 const isDiseaseResult = (name) => {
   if (!name) return false
   const normalized = String(name).toLowerCase()
@@ -201,17 +199,6 @@ const getFavoriteTypeClass = (type) => {
     default:
       return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
   }
-}
-
-const getConfidenceClass = (confidence) => {
-  const numeric = Number(confidence || 0)
-  if (numeric >= 0.8) {
-    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
-  }
-  if (numeric >= 0.55) {
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
-  }
-  return 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
 }
 
 const normalizeRecord = (item) => ({
@@ -401,16 +388,7 @@ onBeforeUnmount(() => {
             : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70'"
           @click="activeSection = 'favorites'"
         >
-          云端收藏
-        </button>
-        <button
-          class="rounded-2xl px-5 py-3 text-left text-sm font-bold transition-colors"
-          :class="activeSection === 'records'
-            ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/10 dark:bg-emerald-400 dark:text-slate-950'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70'"
-          @click="activeSection = 'records'"
-        >
-          识别记录
+          我的收藏
         </button>
 
         <div class="pc-settings-soft mt-auto rounded-[1.75rem] border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/60">
@@ -653,9 +631,9 @@ onBeforeUnmount(() => {
         <div v-else-if="activeSection === 'favorites'" class="space-y-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 class="text-2xl font-black text-slate-900 dark:text-slate-100">云端收藏</h3>
+              <h3 class="text-2xl font-black text-slate-900 dark:text-slate-100">我的收藏</h3>
               <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                此处展示 `favorite/list` 返回的收藏内容，支持直接取消收藏。
+                查看你收藏的资讯、图鉴和问答，也可以在这里取消收藏。
               </p>
             </div>
             <div class="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
@@ -703,65 +681,6 @@ onBeforeUnmount(() => {
             </article>
           </div>
         </div>
-
-        <div v-else-if="activeSection === 'records'" class="space-y-6">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h3 class="text-2xl font-black text-slate-900 dark:text-slate-100">识别记录</h3>
-              <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                当前页会在挂载后拉取 `/api/record/list`，并同步写入 `farmStore.syncIdentificationHistory(records)`。
-              </p>
-            </div>
-            <div class="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-              共 {{ recordCount }} 条
-            </div>
-          </div>
-
-          <div
-            v-if="!historyRecords.length"
-            class="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center text-slate-400 dark:border-slate-700 dark:bg-slate-950/[0.55]"
-          >
-            当前没有识别记录。
-          </div>
-
-          <div v-else class="space-y-4">
-            <article
-              v-for="item in historyRecords"
-              :key="item.id"
-              class="pc-settings-panel flex flex-col gap-4 rounded-[1.75rem] border border-slate-100 bg-white p-5 shadow-sm md:flex-row md:items-center dark:border-slate-800 dark:bg-slate-950/[0.55]"
-            >
-              <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-2xl dark:bg-slate-800">
-                <img v-if="item.imageUrl" :src="item.imageUrl" class="h-full w-full object-cover" />
-                <span v-else>Leaf</span>
-              </div>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div class="text-base font-black text-slate-900 dark:text-slate-100">{{ item.pestName }}</div>
-                  <div class="text-xs text-slate-400">{{ formatDateTime(item.createTime) }}</div>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-2">
-                  <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="getConfidenceClass(item.confidence)">
-                    置信度 {{ formatConfidence(item.confidence) }}
-                  </span>
-                  <span
-                    v-if="item.cropName"
-                    class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                  >
-                    {{ item.cropName }}
-                  </span>
-                  <span
-                    v-if="item.region || item.city"
-                    class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                  >
-                    {{ item.region || item.city }}
-                  </span>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-
 
       </section>
     </div>

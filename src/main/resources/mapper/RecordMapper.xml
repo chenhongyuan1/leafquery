@@ -10,6 +10,10 @@
         <result property="cropName" column="crop_name"/>
         <result property="pestName" column="pest_name"/>
         <result property="confidence" column="confidence"/>
+        <result property="yoloUsed" column="yolo_used"/>
+        <result property="reviewRequired" column="review_required"/>
+        <result property="reviewResult" column="review_result"/>
+        <result property="reviewError" column="review_error"/>
         <result property="locationId" column="location_id"/>
         <result property="city" column="city"/>
         <result property="region" column="region"/>
@@ -24,6 +28,10 @@
             crop_name,
             pest_name,
             confidence,
+            yolo_used,
+            review_required,
+            review_result,
+            review_error,
             location_id,
             city,
             region,
@@ -36,6 +44,10 @@
             #{cropName},
             #{pestName},
             #{confidence},
+            #{yoloUsed},
+            #{reviewRequired},
+            #{reviewResult},
+            #{reviewError},
             #{locationId},
             #{city},
             #{region},

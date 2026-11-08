@@ -1,16 +1,18 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { recordApi, trendApi } from '../../api/index.js'
+import RecordDetailSheet from '../../components/RecordDetailSheet.vue'
 import { useFarmStore } from '../../stores/farmStore'
 import { resolveEffectiveStage } from '../../stores/farmUtils'
-import PCFarmManager from '../../components/pc/PCFarmManager.vue'
+import DataCenterFarmDrawer from '../../components/pc/DataCenterFarmDrawer.vue'
+import { createDataCenterCharts } from '../../utils/dataCenterCharts.js'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
+import { GraphicComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 
-use([CanvasRenderer, PieChart, BarChart, LineChart, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent])
+use([CanvasRenderer, PieChart, BarChart, LineChart, GraphicComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent])
 
 const farmStore = useFarmStore()
 const DEFAULT_REGION_LABEL = '全国默认区'
@@ -31,6 +33,8 @@ const recordsLoading = ref(false)
 const forecastLoading = ref(false)
 const weatherLoading = ref(false)
 const records = ref([])
+const selectedRecord = ref(null)
+const farmDrawerOpen = ref(false)
 const forecastData = ref(null)
 const comparisonForecasts = ref([])
 const weatherFeatures = ref(null)
@@ -79,6 +83,10 @@ const normalizeRecord = (item) => ({
   cropId: item.cropId ?? null,
   cropName: item.cropName || '',
   confidence: Number(item.confidence || 0),
+  yoloUsed: item.yoloUsed ?? null,
+  reviewRequired: item.reviewRequired ?? null,
+  reviewResult: item.reviewResult ?? null,
+  reviewError: item.reviewError ?? null,
   locationId: String(item.locationId ?? ''),
   city: item.city || '',
   region: item.region || '',
@@ -190,18 +198,6 @@ const todayRiskMeta = computed(() => riskMetaOf(todayRiskScore.value))
 const highRiskDays = computed(() => (forecastData.value?.dailySeries || []).filter(item => Number(item.riskScore || 0) >= 0.75).length)
 const averageConfidence = computed(() => filteredRecords.value.length ? filteredRecords.value.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / filteredRecords.value.length : 0)
 const recentRecords = computed(() => filteredRecords.value.slice(0, 6))
-const weatherCards = computed(() => ([
-  { label: '近 3 天平均湿度', value: `${Math.round(weatherSummary.value.humidityMean3d || 0)}%` },
-  { label: '近 3 天平均温度', value: `${Math.round(weatherSummary.value.tempMean3d || 0)}°C` },
-  { label: '近 7 天累计降雨', value: `${Math.round(weatherSummary.value.rainSum7d || 0)} mm` },
-  { label: '连续降雨天数', value: `${Math.round(weatherSummary.value.consecutiveRainDays || 0)} 天` }
-]))
-const summaryCards = computed(() => ([
-  { label: '作物档案数', value: String(farmStore.crops.length), desc: '云端与本地兜底后的作物档案数' },
-  { label: '当前作物记录数', value: String(filteredRecords.value.length), desc: activeCrop.value ? `仅统计 ${activeCrop.value.name} 相关记录` : '未设置作物时展示全部记录' },
-  { label: '近 7 天高风险日', value: String(highRiskDays.value), desc: '未来 7 天预测中达到高风险阈值的天数' },
-  { label: '天气压力', value: `${weatherPressure.value.label} ${weatherPressure.value.score}`, desc: weatherPressure.value.desc }
-]))
 const isRefreshing = computed(() => recordsLoading.value || forecastLoading.value || weatherLoading.value || targetsLoading.value)
 const availableTargetNames = computed(() => (
   selectedTargetType.value === 'PEST'
@@ -267,17 +263,8 @@ const targetOverviewSeries = computed(() => {
     { name: '病害对象', value: diseaseCount },
     { name: '虫害对象', value: pestCount }
   ].filter(item => item.value > 0)
-  return series.length ? series : [{ name: '暂无对象', value: 1 }]
+  return series
 })
-const predictionContextCards = computed(() => ([
-  { label: '对象类型', value: currentTargetTypeLabel.value },
-  { label: '预测对象', value: currentTargetLabel.value },
-  { label: '当前物候期', value: targetContext.value?.stage || '待确认' },
-  { label: '地区', value: targetContext.value?.regionLabel || DEFAULT_REGION_LABEL },
-  { label: '模型版本', value: currentModelVersion.value },
-  { label: '天气压力', value: `${weatherPressure.value.label} ${weatherPressure.value.score}` }
-]))
-
 const resolveForecastTarget = () => {
   const crop = activeCrop.value
   if (!crop) {
@@ -522,383 +509,168 @@ onBeforeUnmount(() => {
   themeObserver?.disconnect()
 })
 
-const activityTrendOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  grid: { left: 40, right: 20, top: 24, bottom: 28 },
-  xAxis: { type: 'category', data: activityTrend.value.map(item => item.label), axisLine: { lineStyle: { color: isDark.value ? '#334155' : '#e2e8f0' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: isDark.value ? '#1e293b' : '#e2e8f0', type: 'dashed' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  series: [{ type: 'line', smooth: true, symbolSize: 8, data: activityTrend.value.map(item => item.value), lineStyle: { width: 3, color: '#10b981' }, itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16,185,129,0.14)' } }]
+const chartOptions = computed(() => createDataCenterCharts({
+  dark: isDark.value, activity: activityTrend.value, distribution: diseaseDistribution.value,
+  buckets: confidenceBuckets.value, comparisons: comparisonSeriesMeta.value, dates: comparisonXAxis.value,
+  primaryKey: comparisonPrimaryKey.value, forecast: forecastSeries.value, overview: targetOverviewSeries.value
 }))
-
-const diseaseDistributionOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'item', backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  legend: { bottom: 0, textStyle: { color: isDark.value ? '#94a3b8' : '#64748b', fontSize: 12 } },
-  series: [{ type: 'pie', radius: ['48%', '74%'], center: ['50%', '42%'], label: { show: false }, data: diseaseDistribution.value.length ? diseaseDistribution.value : [{ name: '暂无识别对象分布', value: 1 }], color: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'] }]
-}))
-
-const confidenceBucketOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  grid: { left: 24, right: 16, top: 24, bottom: 32 },
-  xAxis: { type: 'category', data: confidenceBuckets.value.map(item => item.label), axisLine: { lineStyle: { color: isDark.value ? '#334155' : '#e2e8f0' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: isDark.value ? '#1e293b' : '#e2e8f0', type: 'dashed' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  series: [{ type: 'bar', barWidth: 30, data: confidenceBuckets.value.map(item => ({ value: item.value, itemStyle: { color: item.color, borderRadius: [10, 10, 0, 0] } })), label: { show: true, position: 'top', color: isDark.value ? '#e2e8f0' : '#334155', fontWeight: 700 } }]
-}))
-
-const forecastTrendOption = computed(() => ({
-  backgroundColor: 'transparent',
-  color: comparisonSeriesMeta.value.map(item => item.color),
-  tooltip: { trigger: 'axis', backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  legend: {
-    top: 0,
-    type: 'scroll',
-    textStyle: { color: isDark.value ? '#94a3b8' : '#64748b', fontSize: 12 },
-    pageTextStyle: { color: isDark.value ? '#94a3b8' : '#64748b' }
-  },
-  grid: { left: 40, right: 24, top: 58, bottom: 28 },
-  xAxis: { type: 'category', data: comparisonXAxis.value, axisLine: { lineStyle: { color: isDark.value ? '#334155' : '#e2e8f0' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  yAxis: { type: 'value', min: 0, max: 100, splitLine: { lineStyle: { color: isDark.value ? '#1e293b' : '#e2e8f0', type: 'dashed' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b', formatter: '{value}%' } },
-  series: comparisonSeriesMeta.value.map(item => ({
-    name: item.name,
-    type: 'line',
-    smooth: true,
-    symbolSize: item.isSelected ? 9 : 6,
-    data: item.data,
-    lineStyle: { width: item.isSelected ? 4 : 2.5, color: item.color, opacity: item.isSelected ? 1 : 0.82 },
-    itemStyle: { color: item.color },
-    areaStyle: item.isSelected ? { color: item.color, opacity: 0.12 } : undefined,
-    emphasis: { focus: 'series' },
-    z: item.isSelected ? 10 : 3,
-    markLine: item.key === comparisonPrimaryKey.value ? {
-      silent: true,
-      symbol: 'none',
-      label: { show: false },
-      data: [
-        { yAxis: 75, lineStyle: { color: '#ef4444', type: 'dashed' } },
-        { yAxis: 55, lineStyle: { color: '#f59e0b', type: 'dashed' } }
-      ]
-    } : undefined
-  }))
-}))
-
-const forecastStructureOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  grid: { left: 36, right: 16, top: 18, bottom: 28 },
-  xAxis: { type: 'category', data: forecastSeries.value.map((item, index) => (index === 0 ? '今天' : item.date)), axisLine: { lineStyle: { color: isDark.value ? '#334155' : '#e2e8f0' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b' } },
-  yAxis: { type: 'value', min: 0, max: 100, splitLine: { lineStyle: { color: isDark.value ? '#1e293b' : '#e2e8f0', type: 'dashed' } }, axisLabel: { color: isDark.value ? '#94a3b8' : '#64748b', formatter: '{value}%' } },
-  series: [{
-    type: 'bar',
-    barWidth: 26,
-    data: forecastSeries.value.map(item => {
-      const score = Number(item.riskScore || 0)
-      return {
-        value: Math.round(score * 100),
-        itemStyle: {
-          color: riskMetaOf(score).color,
-          borderRadius: [10, 10, 0, 0]
-        }
-      }
-    }),
-    label: { show: true, position: 'top', color: isDark.value ? '#e2e8f0' : '#334155', fontWeight: 700, formatter: '{c}%' }
-  }]
-}))
-
-const targetOverviewOption = computed(() => ({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'item', backgroundColor: isDark.value ? '#020617' : '#ffffff', borderColor: isDark.value ? '#1e293b' : '#e2e8f0', textStyle: { color: isDark.value ? '#e2e8f0' : '#334155' } },
-  legend: { bottom: 0, textStyle: { color: isDark.value ? '#94a3b8' : '#64748b', fontSize: 12 } },
-  series: [{
-    type: 'pie',
-    radius: ['48%', '74%'],
-    center: ['50%', '42%'],
-    label: { formatter: '{b}\n{c}', color: isDark.value ? '#e2e8f0' : '#334155', fontWeight: 700 },
-    data: targetOverviewSeries.value,
-    color: ['#0ea5e9', '#10b981', '#94a3b8']
-  }]
-}))
+const weatherAvailable = computed(() => Boolean(weatherFeatures.value || forecastData.value?.weatherSummary))
+const weatherValue = (value, unit = '') => weatherAvailable.value ? `${Math.round(value)}${unit}` : '—'
+const inlineTargets = computed(() => allTargetDefinitions.value.filter(item => comparisonViewMode.value === 'ALL' || item.targetType === comparisonViewMode.value))
+const selectTarget = item => { selectedTargetType.value = item.targetType; selectedTargetName.value = item.targetName }
+const metricItems = computed(() => [
+  { label: '今日风险指数', value: forecastData.value ? `${Math.round(todayRiskScore.value * 100)}%` : '—', hint: forecastData.value ? todayRiskMeta.value.label : '暂无预测', color: forecastData.value ? todayRiskMeta.value.color : '' },
+  { label: '近 7 天高风险日', value: forecastData.value ? String(highRiskDays.value) : '—', hint: '天 / 7 天' },
+  { label: '当前作物记录', value: String(filteredRecords.value.length), hint: filteredRecords.value.length ? `均信 ${Math.round(averageConfidence.value * 100)}%` : '暂无记录' },
+  { label: '档案与监测对象', value: String(farmStore.crops.length), hint: `作物 · ${allTargetDefinitions.value.length} 对象` },
+  { label: '天气压力指数', value: weatherAvailable.value ? String(weatherPressure.value.score) : '—', hint: weatherAvailable.value ? weatherPressure.value.label : '暂无天气' },
+  { label: '3 日均湿 / 均温', value: weatherValue(weatherSummary.value.humidityMean3d, '%'), hint: weatherValue(weatherSummary.value.tempMean3d, '°C') },
+  { label: '7 日降雨 / 连雨', value: weatherValue(weatherSummary.value.rainSum7d, 'mm'), hint: weatherValue(weatherSummary.value.consecutiveRainDays, ' 天') },
+  { label: '当前物候期', value: activeCrop.value ? resolveEffectiveStage(activeCrop.value) || '待确认' : '—', hint: activeCrop.value?.city || activeCrop.value?.region || '未设置地区', small: true }
+])
+const contextItems = computed(() => [
+  { label: '对象类型', value: currentTargetTypeLabel.value }, { label: '预测对象', value: currentTargetLabel.value },
+  { label: '当前物候期', value: targetContext.value?.stage || '待确认' }, { label: '地区', value: targetContext.value?.regionLabel || '未设置' },
+  { label: '模型版本', value: forecastData.value?.modelVersion || '—' },
+  { label: '天气压力', value: weatherAvailable.value ? `${weatherPressure.value.label} ${weatherPressure.value.score}` : '—' },
+  { label: '3 日均湿', value: weatherValue(weatherSummary.value.humidityMean3d, '%') }, { label: '3 日均温', value: weatherValue(weatherSummary.value.tempMean3d, '°C') },
+  { label: '7 日降雨', value: weatherValue(weatherSummary.value.rainSum7d, 'mm') }, { label: '连雨天数', value: weatherValue(weatherSummary.value.consecutiveRainDays, ' 天') }
+])
 </script>
 
 <template>
-  <div class="pc-data-page pc-page-scroll custom-scrollbar h-full overflow-y-auto bg-slate-50/50 dark:bg-slate-950/[0.35]">
-    <div class="pc-content-frame p-8">
-    <div class="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-      <div>
-        <h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">数据中心</h2>
-      </div>
-      <button class="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-400 dark:text-slate-950 dark:hover:bg-emerald-300" :disabled="isRefreshing" @click="refreshDashboard">
-        {{ isRefreshing ? '刷新中...' : '刷新看板' }}
-      </button>
+  <div class="pc-data-page pc-page-scroll dc-minimal" :aria-busy="isRefreshing || loading">
+    <div class="pc-content-frame dc-content">
+      <header class="dc-toolbar">
+        <div class="dc-heading"><span class="dc-status-dot" aria-hidden="true"></span><h2>数据中心</h2></div>
+        <div class="dc-crops" aria-label="当前作物"><span class="dc-muted">当前作物</span><button v-for="crop in farmStore.crops" :key="crop.id" type="button" :aria-pressed="String(farmStore.activeCropId) === String(crop.id)" @click="farmStore.setActiveCrop(crop.id)">{{ crop.name }}</button><span v-if="!farmStore.crops.length" class="dc-muted">暂无作物</span></div>
+        <button type="button" class="dc-button" @click="farmDrawerOpen = true">农场档案管理 <span class="dc-muted">({{ farmStore.crops.length }})</span></button>
+        <button type="button" class="dc-button dc-refresh" :disabled="isRefreshing" @click="refreshDashboard">{{ isRefreshing ? '刷新中...' : '刷新看板' }}</button>
+      </header>
+
+      <section class="dc-metrics" aria-label="数据概览">
+        <div v-for="item in metricItems" :key="item.label" class="dc-metric"><div class="dc-metric-label">{{ item.label }}</div><div class="dc-metric-values"><strong :class="{ 'dc-small-value': item.small }" :style="item.color ? { color: item.color } : undefined">{{ item.value }}</strong><span>{{ item.hint }}</span></div></div>
+      </section>
+
+      <div v-if="farmStore.syncError" class="dc-notice" role="status">{{ farmStore.syncError }}</div>
+      <main class="dc-main" aria-label="作物监测看板">
+        <div class="dc-column dc-column-risk">
+          <section class="dc-panel dc-forecast" aria-label="7 天风险对比预测">
+            <div class="dc-panel-title"><h3>7 天风险对比预测</h3><span class="dc-muted dc-count">{{ comparisonTargetCount }}/{{ allTargetDefinitions.length }} 对象</span><div class="dc-filter" aria-label="预测类型"><button v-for="mode in COMPARISON_FILTER_OPTIONS" :key="mode.key" type="button" :aria-pressed="comparisonViewMode === mode.key" @click="comparisonViewMode = mode.key">{{ mode.label }}</button></div></div>
+            <div class="dc-targets" aria-label="预测对象"><button v-for="item in inlineTargets" :key="targetKeyOf(item.targetType, item.targetName)" type="button" :aria-pressed="selectedTargetKey === targetKeyOf(item.targetType, item.targetName)" @click="selectTarget(item)"><span class="dc-target-dot" :class="{ 'dc-target-dot-pest': item.targetType === 'PEST' }"></span>{{ item.targetName }}</button><span v-if="!inlineTargets.length" class="dc-muted">暂无预测对象</span></div>
+            <p v-if="forecastLoading" class="dc-chart-status" role="status">正在生成全部对象的 7 天预测…</p>
+            <p v-else-if="forecastError" class="dc-chart-status dc-error" role="status">{{ forecastError }}</p>
+            <VChart class="dc-chart" :key="forecastTrendChartKey" :option="chartOptions.comparison" :update-options="forecastTrendUpdateOptions" autoresize />
+          </section>
+          <section class="dc-risk-details">
+            <div class="dc-panel dc-structure"><div class="dc-panel-title"><h3>{{ currentTargetLabel }} · 7 日风险结构</h3><span class="dc-muted">7d</span></div><VChart class="dc-chart" :option="chartOptions.structure" autoresize /></div>
+            <aside class="dc-insights" aria-label="预警与驱动因子"><div><div class="dc-panel-title"><h3 class="dc-warning-title">预警提示</h3><span class="dc-muted">{{ forecastData ? todayRiskMeta.label : '暂无预测' }}</span></div><ul v-if="forecastWarnings.length" class="dc-warning-list"><li v-for="(warning, index) in forecastWarnings" :key="index">{{ warning }}</li></ul><p v-else class="dc-muted dc-insight-copy">{{ forecastData ? '暂无额外预警提示。' : '等待有效预测结果。' }}</p></div><div class="dc-drivers"><h3>主要驱动因子</h3><div v-if="topDrivers.length" class="dc-driver-list"><span v-for="(driver, index) in topDrivers" :key="index">{{ typeof driver === 'string' ? driver : driver.name || driver.factor || driver.label || '环境因子' }}</span></div><p v-else class="dc-muted dc-insight-copy">暂无驱动因子</p></div><p class="dc-weather-description">{{ weatherError || (weatherAvailable ? weatherPressure.desc : '暂无可用天气信息。') }}</p></aside>
+          </section>
+        </div>
+
+        <div class="dc-column dc-column-activity">
+          <section class="dc-panel"><div class="dc-panel-title"><h3>14 天识别趋势</h3><span class="dc-muted">{{ filteredRecords.length }} 条</span></div><VChart class="dc-chart" :option="chartOptions.activity" autoresize /></section>
+          <section class="dc-distributions"><div class="dc-panel"><div class="dc-panel-title"><h3>识别热点分布</h3><span class="dc-muted">Top 6</span></div><VChart class="dc-chart" :option="chartOptions.distribution" autoresize /></div><div class="dc-panel"><div class="dc-panel-title"><h3>预测对象概览</h3><span class="dc-muted">{{ allTargetDefinitions.length }} 个</span></div><VChart class="dc-chart" :option="chartOptions.overview" autoresize /></div></section>
+          <section class="dc-panel dc-confidence"><div class="dc-panel-title"><h3>置信度分析</h3><div class="dc-buckets"><span v-for="bucket in confidenceBuckets" :key="bucket.key" :style="{ color: bucket.color }">{{ bucket.label }} {{ bucket.value }}</span></div></div><VChart class="dc-chart" :option="chartOptions.confidence" autoresize /></section>
+        </div>
+
+        <div class="dc-column dc-column-context">
+          <section class="dc-context dc-panel"><div class="dc-panel-title"><h3>预测上下文与气象特征</h3><span class="dc-muted dc-region">{{ activeCrop?.name || '未设置作物' }}</span></div><dl class="dc-context-grid"><div v-for="item in contextItems" :key="item.label"><dt>{{ item.label }}</dt><dd :title="String(item.value)">{{ item.value }}</dd></div></dl></section>
+          <section class="dc-records"><div class="dc-panel-title"><h3>最近识别记录</h3><span class="dc-muted">{{ recentRecords.length }} 条</span></div><div class="dc-record-list"><p v-if="!recentRecords.length" class="dc-empty">当前作物下暂无识别记录。</p><button v-for="item in recentRecords" :key="item.id" type="button" class="dc-record" :aria-label="`查看${item.pestName}的识别记录`" data-testid="record-detail-trigger" @click="selectedRecord = item"><div class="dc-record-image"><img v-if="item.imageUrl" :src="item.imageUrl" alt="" @error="$event.target.style.display = 'none'" /><span v-else aria-hidden="true">🌿</span></div><div class="dc-record-copy"><div class="dc-record-heading"><strong>{{ item.pestName }}</strong><time :datetime="String(item.createTime)">{{ formatDate(item.createTime) }}</time></div><div class="dc-record-meta"><span class="dc-confidence-chip">{{ item.yoloUsed === false ? '未使用 YOLO' : `置信度 ${Math.round(item.confidence * 100)}%` }}</span><span>{{ item.cropName }}</span><span>{{ item.city || item.region }}</span></div></div></button></div></section>
+        </div>
+      </main>
     </div>
-
-    <div v-if="loading" class="flex h-[60vh] items-center justify-center text-sm font-bold text-slate-400">
-      正在同步农场档案与专业看板数据...
-    </div>
-
-    <div v-else class="space-y-6">
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <section class="pc-data-hero rounded-[2rem] border border-slate-100 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-900 p-7 text-white dark:border-slate-800">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold tracking-[0.18em] text-white/80">作物视角</span>
-            <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80">{{ cropScopeLabel }}</span>
-            <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">{{ todayRiskMeta.label }}</span>
-            <span class="rounded-full bg-white/15 px-3 py-1 text-xs font-bold text-white">天气{{ weatherPressure.label }}</span>
-          </div>
-          <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-            <div>
-              <div class="text-sm font-bold uppercase tracking-[0.18em] text-white/[0.55]">Risk Outlook</div>
-              <div class="mt-3 text-5xl font-black" :class="todayRiskMeta.text.replace('500', '300')">{{ Math.round(todayRiskScore * 100) }}%</div>
-              <p class="mt-3 max-w-xl text-sm text-white/70">
-                当前趋势 {{ forecastData?.trendDirection || '平稳' }}，未来 7 天高风险日 {{ highRiskDays }} 天，区域 {{ targetContext?.regionLabel || DEFAULT_REGION_LABEL }}。
-              </p>
-              <div class="mt-5 flex flex-wrap gap-3">
-                <div class="rounded-2xl bg-white/[0.08] px-4 py-3 ring-1 ring-white/10">
-                  <div class="text-xs text-white/[0.55]">识别热点</div>
-                  <div class="mt-2 text-sm font-black">{{ diseaseDistribution[0]?.name || '暂无热点' }}</div>
-                </div>
-                <div class="rounded-2xl bg-white/[0.08] px-4 py-3 ring-1 ring-white/10">
-                  <div class="text-xs text-white/[0.55]">平均置信度</div>
-                  <div class="mt-2 text-sm font-black">{{ Math.round(averageConfidence * 100) }}%</div>
-                </div>
-              </div>
-            </div>
-            <div class="rounded-[1.75rem] bg-white/[0.08] p-5 ring-1 ring-white/10">
-              <div class="text-xs font-bold uppercase tracking-[0.18em] text-white/[0.55]">预测上下文</div>
-              <div class="mt-3 text-lg font-black">{{ targetContext?.crop || '未设定作物' }}</div>
-              <div class="mt-4">
-                <div class="text-[11px] font-bold text-white/55 mb-2">预测对象</div>
-                <div class="flex flex-wrap gap-2 mb-2">
-                  <button
-                    v-for="targetType in ['DISEASE', 'PEST']"
-                    :key="targetType"
-                    @click="selectedTargetType = targetType"
-                    :disabled="targetType === 'DISEASE' ? !targetOptions.diseaseTargets.length : !targetOptions.pestTargets.length"
-                    class="rounded-full px-3 py-1 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="selectedTargetType === targetType ? 'bg-white text-slate-950' : 'bg-white/10 text-white/80'"
-                  >
-                    {{ TARGET_TYPE_LABELS[targetType] }}
-                  </button>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    v-for="targetName in availableTargetNames"
-                    :key="targetName"
-                    @click="selectedTargetName = targetName"
-                    class="rounded-full px-3 py-1 text-xs font-bold transition"
-                    :class="selectedTargetName === targetName ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-white/80'"
-                  >
-                    {{ targetName }}
-                  </button>
-                </div>
-              </div>
-              <div class="mt-4 grid grid-cols-1 gap-3 text-sm text-white/75">
-                <div v-for="item in predictionContextCards" :key="item.label" class="flex items-center justify-between gap-4 rounded-2xl bg-black/10 px-4 py-3">
-                  <span>{{ item.label }}</span>
-                  <span class="font-bold text-white">{{ item.value }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <PCFarmManager compact title="农场管理" subtitle="在数据中心内直接新增、编辑、删除作物并设为当前，所有图表会立即按当前作物联动。" />
-      </div>
-
-      <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <article v-for="item in summaryCards" :key="item.label" class="pc-data-panel rounded-[1.75rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{{ item.label }}</div>
-          <div class="mt-3 text-3xl font-black text-slate-900 dark:text-slate-100">{{ item.value }}</div>
-          <div class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ item.desc }}</div>
-        </article>
-      </div>
-
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="mb-4 flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">14 天识别趋势</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">按当前作物过滤后的记录日趋势。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ filteredRecords.length }} 条</span></div>
-          <VChart :option="activityTrendOption" autoresize style="height: 300px;" />
-        </section>
-
-        <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="mb-4 flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">识别对象分布</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">热点识别对象占比。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ diseaseDistribution.length ? `Top ${diseaseDistribution.length}` : '暂无数据' }}</span></div>
-          <VChart :option="diseaseDistributionOption" autoresize style="height: 300px;" />
-        </section>
-
-        <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="mb-4 flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">预测对象概览</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">当前作物支持的病害与虫害对象结构。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ (targetOptions.diseaseTargets?.length || 0) + (targetOptions.pestTargets?.length || 0) }} 个</span></div>
-          <VChart :option="targetOverviewOption" autoresize style="height: 300px;" />
-        </section>
-      </div>
-
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-        <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="mb-4 flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">置信度分析</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">识别结果可信区间结构。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">平均 {{ Math.round(averageConfidence * 100) }}%</span></div>
-          <VChart :option="confidenceBucketOption" autoresize style="height: 300px;" />
-          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div v-for="bucket in confidenceBuckets" :key="bucket.key" class="pc-data-soft rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/[0.55]">
-              <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{{ bucket.label }}</div>
-              <div class="mt-2 text-lg font-black text-slate-900 dark:text-slate-100">{{ bucket.value }}</div>
-              <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ bucket.range }}</div>
-            </div>
-          </div>
-        </section>
-
-        <section class="pc-data-panel pc-data-chart rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="mb-4 flex items-end justify-between gap-4">
-            <div>
-              <h3 class="text-xl font-black text-slate-900 dark:text-slate-100">7 天风险对比预测</h3>
-              <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">同一张折线图对比当前作物下全部病害与虫害对象的未来 7 天风险变化。</p>
-            </div>
-            <div class="flex flex-wrap items-center justify-end gap-2">
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="option in COMPARISON_FILTER_OPTIONS"
-                  :key="option.key"
-                  @click="comparisonViewMode = option.key"
-                  class="rounded-full px-3 py-1 text-xs font-bold transition"
-                  :class="comparisonViewMode === option.key ? 'bg-slate-900 text-white dark:bg-emerald-400 dark:text-slate-950' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
-              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ comparisonTargetCount }}/{{ comparisonTotalTargetCount }} 个对象</span>
-              <span class="rounded-full px-3 py-1 text-xs font-bold" :class="todayRiskMeta.chip">当前选中今日 {{ Math.round(todayRiskScore * 100) }}%</span>
-            </div>
-          </div>
-          <div v-if="forecastLoading || targetsLoading" class="flex h-[300px] items-center justify-center text-sm font-bold text-slate-400">{{ targetsLoading ? '正在加载预测对象...' : '正在生成全部对象的未来 7 天风险对比...' }}</div>
-          <div v-else-if="forecastError" class="flex h-[300px] items-center justify-center"><div class="rounded-3xl border border-amber-200 bg-amber-50 px-6 py-5 text-center text-sm font-bold text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{{ forecastError }}</div></div>
-          <div v-else class="space-y-5">
-            <VChart
-              v-if="comparisonTargetCount"
-              :key="forecastTrendChartKey"
-              :option="forecastTrendOption"
-              :update-options="forecastTrendUpdateOptions"
-              autoresize
-              style="height: 300px;"
-            />
-            <div v-else class="flex h-[300px] items-center justify-center rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 text-sm font-bold text-slate-400 dark:border-slate-700 dark:bg-slate-950/[0.55] dark:text-slate-500">
-              当前筛选下暂无可展示的预测对象。
-            </div>
-            <div v-if="comparisonSelectionVisible" class="rounded-[1.25rem] border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100">
-              当前高亮对象为 <span class="font-bold">{{ currentTargetTypeLabel }} · {{ currentTargetLabel }}</span>。下方结构图、预警提示和主要驱动因子会跟随当前选中的预测对象更新。
-            </div>
-            <div v-else class="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-              当前选中的 <span class="font-bold">{{ currentTargetTypeLabel }} · {{ currentTargetLabel }}</span> 不在本次图表筛选范围内，折线图仅展示 {{ comparisonViewMode === 'DISEASE' ? '病害' : comparisonViewMode === 'PEST' ? '虫害' : '全部对象' }}。
-            </div>
-            <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <div class="pc-data-soft rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/[0.55]">
-                <div class="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-sm font-black text-slate-900 dark:text-slate-100">当前选中对象风险结构图</div>
-                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">按日拆解 {{ currentTargetLabel }} 的未来 7 天风险等级结构。</div>
-                  </div>
-                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ forecastSeries.length }} 天</span>
-                </div>
-                <VChart :option="forecastStructureOption" autoresize style="height: 220px;" />
-              </div>
-              <div class="grid grid-cols-1 gap-4">
-                <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-500/30 dark:bg-amber-500/10">
-                  <div class="text-sm font-black text-amber-800 dark:text-amber-200">预警提示</div>
-                  <div v-if="forecastWarnings.length" class="mt-3 space-y-2 text-sm text-amber-700 dark:text-amber-100">
-                    <div v-for="warning in forecastWarnings" :key="warning">{{ warning }}</div>
-                  </div>
-                  <div v-else class="mt-3 text-sm text-amber-700/80 dark:text-amber-100/80">当前没有额外预警，建议按常规频率巡检。</div>
-                </div>
-                <div class="pc-data-soft rounded-[1.5rem] border border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/[0.55]">
-                  <div class="text-sm font-black text-slate-900 dark:text-slate-100">主要驱动因子</div>
-                  <div v-if="topDrivers.length" class="mt-3 flex flex-wrap gap-2">
-                    <span v-for="driver in topDrivers" :key="driver" class="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-bold text-white dark:bg-emerald-400 dark:text-slate-950">
-                      {{ driver }}
-                    </span>
-                  </div>
-                  <div v-else class="mt-3 text-sm text-slate-500 dark:text-slate-400">当前暂无驱动因子摘要。</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        <section class="pc-data-panel rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">天气摘要</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">由天气特征接口与趋势预测摘要共同驱动。</p></div><span class="rounded-full px-3 py-1 text-xs font-bold" :class="weatherPressure.chip">{{ weatherPressure.label }} {{ weatherPressure.score }}</span></div>
-          <div v-if="weatherError" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{{ weatherError }}</div>
-          <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <article v-for="card in weatherCards" :key="card.label" class="pc-data-soft rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-950/[0.55]">
-              <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{{ card.label }}</div>
-              <div class="mt-3 text-2xl font-black text-slate-900 dark:text-slate-100">{{ card.value }}</div>
-            </article>
-          </div>
-          <div class="pc-data-soft mt-5 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5 text-sm leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-950/[0.55] dark:text-slate-300">
-            {{ weatherPressure.desc }} 当前关注作物为 {{ targetContext?.crop || '未设定' }}，当前预测对象为 {{ currentTargetLabel }}。
-          </div>
-        </section>
-
-        <section class="pc-data-panel rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/[0.88]">
-          <div class="flex items-end justify-between gap-4"><div><h3 class="text-xl font-black text-slate-900 dark:text-slate-100">最近识别记录</h3><p class="mt-2 text-sm text-slate-500 dark:text-slate-400">只展示当前作物视角下的最新识别结果。</p></div><span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ cropScopeLabel }}</span></div>
-          <div v-if="!recentRecords.length" class="pc-data-soft mt-6 rounded-[1.75rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-16 text-center text-slate-400 dark:border-slate-700 dark:bg-slate-950/[0.55]">当前作物下暂无识别记录。</div>
-          <div v-else class="mt-5 space-y-4">
-            <article v-for="item in recentRecords" :key="item.id" class="pc-data-soft flex items-center gap-4 rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/[0.55]">
-              <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300"><img v-if="item.imageUrl" :src="item.imageUrl" class="h-full w-full object-cover" /><span v-else>Leaf</span></div>
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"><div class="truncate text-base font-black text-slate-900 dark:text-slate-100">{{ item.pestName }}</div><div class="text-xs text-slate-400">{{ formatDate(item.createTime, true) }}</div></div>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="riskMetaOf(item.confidence).chip">置信度 {{ Math.round(item.confidence * 100) }}%</span>
-                  <span v-if="item.cropName" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ item.cropName }}</span>
-                  <span v-if="item.region || item.city" class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ item.region || item.city }}</span>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-      </div>
-    </div>
+    <!-- Single element root is required by PCLayout's out-in page transition. -->
+    <RecordDetailSheet :record="selectedRecord" @close="selectedRecord = null" />
+    <DataCenterFarmDrawer :open="farmDrawerOpen" @close="farmDrawerOpen = false" />
   </div>
-    </div>
 </template>
 
 <style scoped>
-.pc-data-hero { box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); }
-:global(.dark .pc-data-hero) { box-shadow: 0 2px 8px rgba(2, 6, 23, 0.14); }
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-:global(.dark .custom-scrollbar::-webkit-scrollbar-thumb) { background: #334155; }
-:global(.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover) { background: #475569; }
-
-.pc-data-panel {
-  /* Canvas pixel widths must not become a grid item's minimum width. */
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
-}
-
-.pc-data-soft {
-  min-width: 0;
-  background: rgba(248, 250, 252, 0.96);
-  border-color: rgba(226, 232, 240, 0.9);
-}
-
-:global(.dark .pc-data-page) {
-  color-scheme: dark;
-}
-
-:global(.dark .pc-data-panel) {
-  background: rgba(15, 23, 42, 0.88);
-  border-color: rgba(51, 65, 85, 0.88);
-  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.12);
-}
-
-:global(.dark .pc-data-soft) {
-  background: rgba(2, 6, 23, 0.55);
-  border-color: rgba(51, 65, 85, 0.82);
-}
-
-:global(.dark .pc-data-chart canvas),
-:global(.dark .pc-data-chart svg) {
-  background: transparent !important;
-}
+.pc-data-page { --dc-line: rgba(203,213,225,.45); --dc-text: #0f172a; --dc-muted: #718096; --dc-accent: #059669; display: flex; height: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; color: var(--dc-text); background: linear-gradient(180deg,#fff 0%,#f1f5f9 100%); font-size: 14px; }
+.dc-content { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.dc-toolbar { display: flex; flex-shrink: 0; min-height: 64px; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--dc-line); }
+.dc-heading { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+.dc-heading h2 { font-size: 20px; font-weight: 800; letter-spacing: -.03em; }
+.dc-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+.dc-crops { display: flex; gap: 4px; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.dc-crops > span { flex-shrink: 0; padding-right: 4px; font-size: 13px; }
+.dc-crops button, .dc-targets button { flex-shrink: 0; padding: 6px 11px; font-size: 13px; white-space: nowrap; }
+.dc-crops button[aria-pressed='true'], .dc-targets button[aria-pressed='true'] { color: var(--dc-accent); background: rgba(16,185,129,.09); }
+.dc-button { flex-shrink: 0; border: 1px solid var(--dc-line); padding: 7px 13px; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.dc-button:hover { border-color: #10b981; color: var(--dc-accent); }
+.dc-refresh { margin-left: auto; background: #10b981; border-color: #10b981; color: #fff; }
+.dc-refresh:hover { color: #fff; background: #059669; }
+.dc-refresh:disabled { opacity: .5; cursor: wait; }
+.dc-metrics { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); flex-shrink: 0; border-bottom: 1px solid var(--dc-line); }
+.dc-metric { padding: 16px 14px; min-width: 0; border-right: 1px solid var(--dc-line); }
+.dc-metric:last-child { border: 0; }
+.dc-metric-label { font-size: 12px; color: var(--dc-muted); margin-bottom: 5px; white-space: nowrap; }
+.dc-metric-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
+.dc-metric-values strong { font: 750 26px/1.3 ui-monospace,Consolas,monospace; letter-spacing: -.06em; }
+.dc-metric-values .dc-small-value { font-size: 16px; font-family: inherit; line-height: 1.5; letter-spacing: 0; }
+.dc-metric-values > span { color: var(--dc-muted); font-size: 12px; }
+.dc-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,5fr) minmax(0,4fr) minmax(0,3fr); }
+.dc-column { min-width: 0; min-height: 0; display: grid; overflow: hidden; }
+.dc-column + .dc-column { border-left: 1px solid var(--dc-line); }
+.dc-column-risk { grid-template-rows: minmax(0,1.2fr) minmax(0,1fr); }
+.dc-column-activity { grid-template-rows: repeat(3,minmax(0,1fr)); }
+.dc-column-context { grid-template-rows: auto minmax(0,1fr); }
+.dc-column > * + * { border-top: 1px solid var(--dc-line); }
+.dc-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 14px; }
+.dc-panel-title { display: flex; flex-shrink: 0; align-items: center; flex-wrap: wrap; gap: 5px 8px; min-height: 26px; margin-bottom: 7px; }
+.dc-panel-title h3, .dc-drivers h3 { font-size: 16px; line-height: 1.5; font-weight: 750; }
+.dc-panel-title > .dc-muted { margin-left: auto; font-size: 12px; }
+.dc-chart { flex: 1; width: 100%; min-height: 0; }
+.dc-filter { display: flex; margin-left: auto; gap: 2px; }
+.dc-filter button { padding: 5px 9px; font-size: 13px; white-space: nowrap; color: var(--dc-muted); }
+.dc-filter button[aria-pressed='true'] { color: #fff; background: #0f172a; }
+.dc-targets { display: flex; flex-shrink: 0; align-items: center; overflow-x: auto; scrollbar-width: thin; gap: 3px; margin-bottom: 5px; min-height: 25px; }
+.dc-targets button { display: inline-flex; align-items: center; gap: 5px; }
+.dc-target-dot { width: 5px; height: 5px; border-radius: 50%; background: #38bdf8; }
+.dc-target-dot-pest { background: #10b981; }
+.dc-chart-status { font-size: 13px; color: var(--dc-muted); padding: 5px 0; }
+.dc-error { color: #d97706; }
+.dc-risk-details { display: grid; min-height: 0; grid-template-columns: minmax(0,7fr) minmax(0,5fr); overflow: hidden; }
+.dc-insights { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; gap: 16px; padding: 16px 14px; border-left: 1px solid var(--dc-line); }
+.dc-warning-title { color: #d97706; }
+.dc-warning-list { padding-left: 14px; list-style: disc; font-size: 13px; line-height: 1.8; }
+.dc-insight-copy { font-size: 13px; margin-top: 7px; line-height: 1.8; }
+.dc-drivers, .dc-weather-description { border-top: 1px solid var(--dc-line); padding-top: 10px; }
+.dc-driver-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.dc-driver-list span { padding: 2px 5px; background: rgba(148,163,184,.09); font-size: 12px; }
+.dc-weather-description { margin-top: auto; color: var(--dc-muted); font-size: 13px; line-height: 1.8; }
+.dc-distributions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); min-height: 0; }
+.dc-distributions > * + * { border-left: 1px solid var(--dc-line); }
+.dc-buckets { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; font-size: 11px; }
+.dc-region { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-context-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 1px solid var(--dc-line); border-left: 1px solid var(--dc-line); margin-top: 4px; }
+.dc-context-grid > div { min-width: 0; padding: 8px; border-right: 1px solid var(--dc-line); border-bottom: 1px solid var(--dc-line); }
+.dc-context-grid dt { color: var(--dc-muted); font-size: 12px; margin-bottom: 3px; }
+.dc-context-grid dd { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-records { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.dc-records > .dc-panel-title { padding: 9px 14px; margin: 0; border-bottom: 1px solid var(--dc-line); }
+.dc-record-list { flex: 1; overflow-y: auto; min-height: 0; }
+.dc-record { display: flex; align-items: center; gap: 10px; padding: 12px 14px; width: 100%; text-align: left; border-bottom: 1px solid var(--dc-line); }
+.dc-record:hover { background: rgba(16,185,129,.04); }
+.dc-record-image { width: 34px; height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(16,185,129,.08); overflow: hidden; }
+.dc-record-image img { width: 100%; height: 100%; object-fit: cover; }
+.dc-record-copy { flex: 1; min-width: 0; }
+.dc-record-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.dc-record-heading strong { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-record-heading time { color: var(--dc-muted); font-size: 11px; margin-left: auto; }
+.dc-record-meta { display: flex; gap: 5px; flex-wrap: wrap; color: var(--dc-muted); font-size: 12px; margin-top: 5px; }
+.dc-confidence-chip { color: var(--dc-accent); background: rgba(16,185,129,.08); padding: 1px 3px; }
+.dc-muted { color: var(--dc-muted); }
+.dc-empty { padding: 30px 16px; color: var(--dc-muted); font-size: 12px; }
+.dc-notice { padding: 8px 16px; color: #b45309; font-size: 11px; border-bottom: 1px solid var(--dc-line); }
+.dc-minimal button:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+.dc-button, .dc-crops button, .dc-filter button, .dc-targets button { border-radius: 9999px; }
+.dc-driver-list span, .dc-confidence-chip { border-radius: 9999px; }
+:global(.dark .pc-data-page) { --dc-line: rgba(51,65,85,.4); --dc-text: #e2e8f0; --dc-muted: #94a3b8; --dc-accent: #34d399; background: linear-gradient(180deg,#0b1120 0%,#020617 100%); }
+:global(.dark .dc-filter button[aria-pressed='true']) { background: #34d399; color: #020617; }
+@media (max-width: 1399px) { .dc-metrics { grid-template-columns: repeat(4,minmax(0,1fr)); } .dc-metric:nth-child(-n+4) { border-bottom: 1px solid var(--dc-line); } .dc-metric:nth-child(4) { border-right: 0; } }
+@media (max-width: 1279px) { .dc-main { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); min-height: 980px; flex: none; grid-template-rows: 660px 320px; } .dc-column-context { grid-column: 1 / -1; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: 1fr; border-left: 0 !important; border-top: 1px solid var(--dc-line); } .dc-column-context > * + * { border-top: 0; border-left: 1px solid var(--dc-line); } .dc-toolbar { gap: 8px; flex-wrap: wrap; } .dc-crops { max-width: 48%; } }
+@media (min-width: 1280px) and (max-height: 800px) { .dc-main { flex: none; min-height: 640px; } }
+@media (prefers-reduced-motion: reduce) { .dc-content { transition: none; } }
 </style>

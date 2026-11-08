@@ -279,13 +279,8 @@ const currentComponent = computed(() => {
           </span>
           <span v-if="isSidebarCollapsed" id="pc-sidebar-expand-hint" class="pc-sidebar-tooltip" role="tooltip">打开边栏</span>
         </button>
-      </div>
-
-      <!-- 导航区 -->
-      <nav class="pc-sidebar-nav flex-1 min-h-0 overflow-y-auto" aria-label="主导航">
-        <div class="pc-sidebar-tools" :aria-hidden="isSidebarCollapsed" :inert="isSidebarCollapsed">
-          <button v-if="!isSidebarCollapsed" ref="sidebarCollapseButton" type="button"
-                  class="pc-sidebar-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        <button v-if="!isSidebarCollapsed" ref="sidebarCollapseButton" type="button"
+                  class="pc-sidebar-toggle pc-sidebar-close flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   :class="isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'"
                   aria-label="收起侧边栏" title="收起侧边栏" aria-expanded="true" aria-controls="pc-sidebar"
                   @click="toggleSidebar">
@@ -293,8 +288,11 @@ const currentComponent = computed(() => {
               <rect x="3" y="4" width="18" height="16" rx="3" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 4v16m8-12-4 4 4 4" />
             </svg>
-          </button>
-        </div>
+        </button>
+      </div>
+
+      <!-- 导航区 -->
+      <nav class="pc-sidebar-nav flex-1 min-h-0 overflow-y-auto" aria-label="主导航">
         <div class="space-y-2">
         <button v-for="item in navItems" :key="item.id"
                 type="button"
@@ -466,7 +464,7 @@ const currentComponent = computed(() => {
 </template>
 
 <style scoped>
-.pc-layout { --pc-sidebar-expanded-width: 256px; --pc-sidebar-collapsed-width: 80px; --pc-content-inset: 0px; }
+.pc-layout { --pc-sidebar-expanded-width: 220px; --pc-sidebar-collapsed-width: 80px; --pc-content-inset: 0px; }
 .pc-layout--sidebar-collapsed { --pc-content-inset: calc((var(--pc-sidebar-expanded-width) - var(--pc-sidebar-collapsed-width)) / 2); }
 .pc-sidebar { --sidebar-logo-hover: #edf1f3; --sidebar-hint-bg: #1f2937; --sidebar-hint-text: #f8fafc; width: var(--pc-sidebar-expanded-width); overflow: hidden; transition: width 260ms cubic-bezier(0.22, 1, 0.36, 1); }
 .pc-sidebar--dark { --sidebar-logo-hover: #27272a; --sidebar-hint-bg: #e5e7eb; --sidebar-hint-text: #111827; }
@@ -475,9 +473,16 @@ const currentComponent = computed(() => {
 .pc-main { flex: 1 1 0; }
 :deep(.pc-content-frame) { margin-inline: var(--pc-content-inset); transition: margin 260ms cubic-bezier(0.22, 1, 0.36, 1); }
 :deep(.pc-page-scroll) { scrollbar-gutter: stable; }
-.pc-sidebar-brand { padding-inline: 20px; transition: padding 260ms ease; }
+.pc-sidebar-brand { gap: 8px; padding-inline: 12px; transition: padding 260ms ease; }
+.pc-sidebar:not(.pc-sidebar--collapsed) .pc-sidebar-brand-button { flex: 1; min-width: 0; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.leafquery-brand) { gap: 6px; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.brand-icon) { width: 32px; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.brand-icon img) { width: 30px; height: 30px; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.brand-name) { gap: 4px; font-size: 18px; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.brand-pc) { padding: 3px 4px; font-size: 10px; }
+.pc-sidebar:not(.pc-sidebar--collapsed) :deep(.brand-caption) { font-size: 12px; letter-spacing: 0.5px; }
 .pc-sidebar-nav { padding: 24px 16px; transition: padding 260ms ease; }
-.pc-sidebar-tools { display: flex; align-items: center; justify-content: flex-end; height: 32px; margin-bottom: 8px; opacity: 1; overflow: hidden; transition: height 200ms ease, margin-bottom 200ms ease, opacity 160ms ease; }
+.pc-sidebar-close { align-self: flex-start; margin-top: 22px; }
 .pc-sidebar-brand-button .leafquery-brand, .pc-sidebar-open-icon { transition: opacity 140ms ease; }
 .pc-sidebar-open-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--brand-text, currentColor); opacity: 0; }
 .pc-sidebar-tooltip { position: fixed; top: 30px; left: calc(var(--pc-sidebar-collapsed-width) + 8px); z-index: 60; padding: 9px 14px; border-radius: 12px; background: var(--sidebar-hint-bg); color: var(--sidebar-hint-text); font-size: 14px; font-weight: 500; line-height: 20px; white-space: nowrap; pointer-events: none; visibility: hidden; opacity: 0; transform: translateX(-4px); transition: opacity 140ms ease, transform 140ms ease; }
@@ -493,7 +498,6 @@ const currentComponent = computed(() => {
 .pc-sidebar--collapsed .pc-sidebar-brand-button:hover .leafquery-brand, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .leafquery-brand { opacity: 0; }
 .pc-sidebar--collapsed .pc-sidebar-brand-button:hover .pc-sidebar-open-icon, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .pc-sidebar-open-icon { opacity: 1; }
 .pc-sidebar--collapsed .pc-sidebar-brand-button:hover .pc-sidebar-tooltip, .pc-sidebar--collapsed .pc-sidebar-brand-button:focus-visible .pc-sidebar-tooltip { visibility: visible; opacity: 1; transform: none; }
-.pc-sidebar--collapsed .pc-sidebar-tools { height: 0; margin-bottom: 0; opacity: 0; }
 .pc-sidebar--collapsed .pc-sidebar-nav, .pc-sidebar--collapsed .pc-sidebar-footer { padding-inline: 12px; }
 .pc-sidebar--collapsed .pc-sidebar-item, .pc-sidebar--collapsed .pc-sidebar-user-details { gap: 0; }
 .pc-sidebar--collapsed .pc-sidebar-text { max-width: 0; opacity: 0; }
@@ -501,7 +505,7 @@ const currentComponent = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   :deep(.pc-content-frame) { transition: none; }
   .pc-sidebar, .pc-sidebar-brand, .pc-sidebar-nav, .pc-sidebar-item,
-  .pc-sidebar-user-details, .pc-sidebar-text, .pc-sidebar-footer, .pc-sidebar-tools,
+  .pc-sidebar-user-details, .pc-sidebar-text, .pc-sidebar-footer,
   .pc-sidebar-brand-button .leafquery-brand, .pc-sidebar-open-icon, .pc-sidebar-tooltip { transition: none; }
 }
 

@@ -14,9 +14,13 @@ public record RecordResponse(
     String city,
     String region,
     String imageUrl,
-    Date createTime
+    Date createTime,
+    Boolean yoloUsed,
+    Boolean reviewRequired,
+    String reviewResult,
+    String reviewError
 ) {
     public static RecordResponse from(Record value) {
-        return value == null ? null : new RecordResponse(value.getId(), value.getUserId(), value.getCropId(), value.getCropName(), value.getPestName(), value.getConfidence(), value.getLocationId(), value.getCity(), value.getRegion(), value.getImageUrl(), value.getCreateTime());
+        return value == null ? null : new RecordResponse(value.getId(), value.getUserId(), value.getCropId(), value.getCropName(), value.getPestName(), value.getConfidence(), value.getLocationId(), value.getCity(), value.getRegion(), value.getImageUrl(), value.getCreateTime(), value.getYoloUsed(), value.getReviewRequired(), value.getReviewResult(), value.getReviewError());
     }
 }

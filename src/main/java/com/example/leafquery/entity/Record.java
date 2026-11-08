@@ -9,6 +9,10 @@ public class Record {
     private String cropName;
     private String pestName;
     private Double confidence;
+    private Boolean yoloUsed;
+    private Boolean reviewRequired;
+    private String reviewResult;
+    private String reviewError;
     private String locationId;
     private String city;
     private String region;
@@ -78,6 +82,15 @@ public class Record {
     public String getLocationId() {
         return locationId;
     }
+
+    public Boolean getYoloUsed() { return yoloUsed; }
+    public void setYoloUsed(Boolean yoloUsed) { this.yoloUsed = yoloUsed; }
+    public Boolean getReviewRequired() { return reviewRequired; }
+    public void setReviewRequired(Boolean reviewRequired) { this.reviewRequired = reviewRequired; }
+    public String getReviewResult() { return reviewResult; }
+    public void setReviewResult(String reviewResult) { this.reviewResult = reviewResult; }
+    public String getReviewError() { return reviewError; }
+    public void setReviewError(String reviewError) { this.reviewError = reviewError; }
 
     public void setLocationId(String locationId) {
         this.locationId = locationId;

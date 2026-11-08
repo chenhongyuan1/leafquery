@@ -16,14 +16,15 @@ const imageBytes = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8
 const review = 'DIFY_REVIEW_ONLY：请补充近照核验。'
 const failure = 'Dify 复核失败：Dify 模型端点已关闭或暂不可用，请在 Dify 中恢复端点或更换可用模型。'
 
-test('识别复核独立于问答模型，失败原因在两端显示', { timeout: 120000 }, async t => {
+// PC 工作台已改为仅前端输入预览，其交互由 promptInput.browser.test.js 验证。
+test('移动端识别复核独立于问答模型，失败原因和报告锁定正确显示', { timeout: 120000 }, async t => {
   assert.ok(browserPath, '需要 Chrome/Edge，或设置 BROWSER_EXECUTABLE_PATH')
   const server = await createServer({ root, server: { port: 0, open: false }, logLevel: 'error' })
   let browser
   try {
     await server.listen()
     browser = await puppeteer.launch({ headless: true, executablePath: browserPath })
-    for (const device of ['pc', 'mobile']) {
+    for (const device of ['mobile']) {
       for (const reviewState of ['failed', 'valid', 'meaningless']) {
         const reviewSucceeded = reviewState !== 'failed'
         const meaningless = reviewState === 'meaningless'
